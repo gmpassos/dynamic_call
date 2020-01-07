@@ -35,5 +35,17 @@ void main() {
 
     });
 
+    test('callLogout', () async {
+
+      DynCall<bool,bool> callLogout = DynCall<bool,bool>( [] , DynCallType.BOOL ) ;
+
+      callLogout.executor = DynCallStaticExecutor<bool>( true ) ;
+
+      bool ok = await callLogout.call() ;
+
+      expect(ok, isTrue);
+
+    });
+
   });
 }
