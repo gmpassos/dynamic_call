@@ -27,7 +27,7 @@ class DynCall<E,O> {
 
   DynCallExecutor<E> executor ;
 
-  Future<O> call( Map<String,dynamic> parameters , [ SysCallCallback<O> callback ] ) {
+  Future<O> call( [ Map<String,dynamic> parameters , SysCallCallback<O> callback ] ) {
     if (executor == null) {
       var out = parseOutput(null);
 
@@ -63,6 +63,8 @@ class DynCall<E,O> {
 
   Map<String,String> buildCallParameters(Map<String,dynamic> parameters) {
     Map<String,String> callParameters = {} ;
+
+    if (parameters == null || parameters.isEmpty) return callParameters ;
 
     for (var k in input) {
       var val = parameters[k] ;

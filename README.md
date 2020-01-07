@@ -8,6 +8,9 @@ A simple usage example:
 
 ```dart
 import 'package:dynamic_call/dynamic_call.dart';
+import 'dart:async' ;
+
+// Entity for logged user:
 
 class UserLogin {
 
@@ -40,42 +43,26 @@ class UserLogin {
 
 }
 
+// A generic AppSystem that can be used in many projects:
 
-abstract class AppSystem {
+class AppSystem {
 
   final DynCall<dynamic,UserLogin> callLogin = DynCall<dynamic,UserLogin>( ['username','pass'] , DynCallType.JSON , (dynamic userJson) => UserLogin.parse(userJson) , true ) ;
 
   Future<UserLogin> login(String username, String pass, void Function(UserLogin user) onUserLogin) {
-    return callLogin.call( {'username': username, 'pass': pass} , (user) => _processLogin(user, onUserLogin) )  ;
+    return callLogin.call( {'username': username, 'pass': pass} , onUserLogin)  ;
   }
 
-  static UserLogin _processLogin(UserLogin user, ProcessLoginFunction processFunction) {
-    if ( user != null ) {
-      //... notify login successful.
-      return user ;
-    }
-    return null ;
-  }
-
-  final DynCall<bool,bool> callLogout = DynCall<bool,bool>( ['username'] , DynCallType.BOOL , null, true ) ;
+  final DynCall<bool,bool> callLogout = DynCall<bool,bool>( [] , DynCallType.BOOL , null, true ) ;
 
   Future<bool> logout() {
-    String username = GlobalUser.user.username ;
-    return callLogout.call( {'username': username} ) ;
+    return callLogout.call() ;
   }
 
   final DynCall<dynamic,UserLogin> callRegister = DynCall<dynamic,UserLogin>( ['name', 'email', 'username', 'password'] , DynCallType.JSON , (dynamic userJson) => UserLogin.parse(userJson) ) ;
 
   Future<UserLogin> register(String name, String email, String username, String pass, void Function(UserLogin user) onRegisteredUser) {
-    return callRegister.call( {'name': name, 'email': email, 'username': username, 'password': pass} , (user) => _processRegister(user) ) ;
-  }
-
-  static UserLogin _processRegister(UserLogin user) {
-    if (user != null) {
-      //... notify new user created.
-      return user ;
-    }
-    return null ;
+    return callRegister.call( {'name': name, 'email': email, 'username': username, 'password': pass} , onRegisteredUser) ;
   }
 
   final DynCall<bool,bool> callChangePassword = DynCall( ['username','currentPass','newPass'] , DynCallType.BOOL) ;
@@ -86,22 +73,56 @@ abstract class AppSystem {
 
 }
 
-main() {
+// Example of usage of the system and integrate with an WS API:
+
+main() async {
   
+  var appSystem = AppSystem() ;
+
+  ///////////////////////////////////////////
+  ////// Configure Dynamic Call Executors:
+
   var httpClient = DynCallHttpClient('https://your.domain') ;
 
+  // DynCallExecutor with HttpClient with base URL: https://your.domain/path/to/api-1
   DynCallHttpExecutorFactory executorFactory = DynCallHttpExecutorFactory( httpClient , "path/to/api-1" ) ;
 
-  executorFactory.call( oceanAppSystem.callLogin ).executor( HttpMethod.POST, path: "login", authorizationFields: ['username', 'pass'] ) ;
+  // POST https://your.domain/path/to/api-1/login
+  // Authorization: Basic BASE64($username:$pass)
+  executorFactory.call( appSystem.callLogin ).executor( HttpMethod.POST, path: "login", authorizationFields: ['username', 'pass'] ) ;
 
-  executorFactory.call( oceanAppSystem.callLogout ).executor( HttpMethod.GET, path: "logout" ) ;
+  // GET https://your.domain/path/to/api-1/logout
+  executorFactory.call( appSystem.callLogout ).executor( HttpMethod.GET, path: "logout" ) ;
 
-  executorFactory.call( oceanAppSystem.callRegister ).executor( HttpMethod.POST, path: "register", parametersMap: {'*': '*'} ) ;
+  // POST https://your.domain/path/to/api-1/register
+  // Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  // name=$name&email=$email&username=$username&password=$password
+  executorFactory.call( appSystem.callRegister ).executor( HttpMethod.POST, path: "register", parametersMap: {'*': '*'} ) ;
 
-  executorFactory.call(  oceanAppSystem.callChangePassword ).executor( HttpMethod.POST, path: "changePassword",
+  // POST https://your.domain/path/to/api-1/changePassword
+  // Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+  // username=$username&current_password=$currentPass&password=$newPass
+  executorFactory.call(  appSystem.callChangePassword ).executor( HttpMethod.POST, path: "changePassword",
       parametersMap: {'*': '*', 'currentPass': 'current_password', 'newPass': 'password'},
       errorResponse: false
   ) ;
+  
+  ///////////////////////////////////////////
+  ////// Usage of AppSystem:
+
+  UserLogin loggedUser = await appSystem.login('joe', 'pass123', (user) => notifyLogin(user) ) ;
+
+  // ... Or register a new user (back-end automatically logins with register user):
+
+  UserLogin loggedUser = await appSystem.register('Joe Smith', 'joe@email.com', 'joe', 'pass123', (user) => notifyLogin(user) ) ;
+
+  //... Change some user password:
+
+  bool changePassOK = await appSystem.changePassword('joe','pass123','pass456') ;
+  
+  //... Logout current user:
+ 
+  bool logoutOK = await appSystem.logout() ;
 
 }
 ```
