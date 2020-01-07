@@ -8,9 +8,7 @@ environment:
 
 dependencies:
   mercury_client: ^1.0.1
-    #path: ../mercury_client
   swiss_knife: ^2.2.0
-    #path: ../swiss_knife
   enum_to_string: ^1.0.7
 
 dev_dependencies:
