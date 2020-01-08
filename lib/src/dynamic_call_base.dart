@@ -1,7 +1,6 @@
 
 import 'dart:convert' show jsonDecode ;
 import 'package:mercury_client/mercury_client.dart';
-import 'package:enum_to_string/enum_to_string.dart';
 
 enum DynCallType {
   BOOL,
@@ -99,7 +98,7 @@ class DynCall<E,O> {
       case DynCallType.DECIMAL: return parseOutputDECIMAL(value) as E ;
       case DynCallType.JSON: return parseOutputJSON(value) as E ;
 
-      default: throw StateError("Can't handle type: ${ EnumToString.parse(outputType) }") ;
+      default: throw StateError("Can't handle type: $outputType") ;
     }
   }
 
