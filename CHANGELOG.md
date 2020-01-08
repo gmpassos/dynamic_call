@@ -1,3 +1,8 @@
+## 1.0.2
+
+- Update dependencies:
+    - Remove swiss_knife and enum_to_string.
+    
 ## 1.0.1
 
 - Add Author and License to README.
