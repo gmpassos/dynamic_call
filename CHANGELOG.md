@@ -1,3 +1,7 @@
+## 1.0.3
+
+- DynCallHttpExecutor: body, bodyPattern, bodyType, outputValidator, outputFilter, outputFilterPattern
+
 ## 1.0.2
 
 - Update dependencies:
