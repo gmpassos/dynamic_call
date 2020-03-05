@@ -162,6 +162,14 @@ class DynCallCredentialHTTP extends DynCallCredential {
 
   DynCallCredentialHTTP(this.credential);
 
+  factory DynCallCredentialHTTP.fromJSONToken( dynamic json ) {
+    if (json is Map) {
+      var bearerCredential = BearerCredential.fromJSONToken(json);
+      return bearerCredential != null ? DynCallCredentialHTTP( bearerCredential ) : null ;
+    }
+    return null ;
+  }
+
   @override
   bool applyCredential(DynCallExecutor executor) {
     if (credential == null) return false ;
@@ -176,7 +184,7 @@ class DynCallCredentialHTTP extends DynCallCredential {
 
 }
 
-typedef DynCallCredentialParser<E> = DynCallCredential Function( DynCallExecutor<E> executor, String output, bool outputValid, String outputFiltered, Map<String,String> parameters ) ;
+typedef DynCallCredentialParser<E> = DynCallCredential Function( String output, String outputFiltered, Map<String,String> parameters ) ;
 
 abstract class DynCallExecutor<E> {
 
@@ -594,10 +602,12 @@ class _CredentialInterceptor<E> extends HTTPOutputInterceptorWrapper<E> {
 
   @override
   void interceptOutput(DynCallExecutor<E> executor, String outputOriginal, bool outputValid, String outputFiltered, Map<String, String> callParameters) {
-    var credential = _credentialParser( executor, outputOriginal, outputValid, outputFiltered , callParameters );
+    if (outputValid ?? false) {
+      var credential = _credentialParser(outputOriginal, outputFiltered, callParameters);
 
-    if (credential != null) {
-      executor.setCredential(credential) ;
+      if (credential != null) {
+        executor.setCredential(credential);
+      }
     }
   }
 

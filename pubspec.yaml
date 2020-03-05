@@ -7,7 +7,7 @@ environment:
   sdk: '>=2.6.0 <3.0.0'
 
 dependencies:
-  mercury_client: ^1.0.8
+  mercury_client: ^1.0.9
     #path: ../mercury_client
 
 dev_dependencies:
