@@ -1,3 +1,10 @@
+## 1.0.4
+
+- DynCallHttpExecutor: dynamic body, dynamic bodyPattern (String or Function), fullPath, outputInterceptor, setCredential(), authorizationFields
+- DynCallHttpExecutorFactory: authorizationExecutor(...)
+- Update dependencies:
+    - mercury_client: 1.0.8
+    
 ## 1.0.3
 
 - DynCallHttpExecutor: body, bodyPattern, bodyType, outputValidator, outputFilter, outputFilterPattern

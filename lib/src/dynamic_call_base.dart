@@ -152,9 +152,37 @@ class DynCall<E,O> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+abstract class DynCallCredential {
+  bool applyCredential( DynCallExecutor executor ) ;
+}
+
+class DynCallCredentialHTTP extends DynCallCredential {
+
+  final Credential credential ;
+
+  DynCallCredentialHTTP(this.credential);
+
+  @override
+  bool applyCredential(DynCallExecutor executor) {
+    if (credential == null) return false ;
+
+    if ( executor is DynCallHttpExecutor ) {
+      executor.httpClient.authorization = credential ;
+      return true ;
+    }
+
+    return false ;
+  }
+
+}
+
+typedef DynCallCredentialParser<E> = DynCallCredential Function( DynCallExecutor<E> executor, String output, bool outputValid, String outputFiltered, Map<String,String> parameters ) ;
+
 abstract class DynCallExecutor<E> {
 
   Future<E> call<X>( DynCall<E,X> sysCall , Map<String,String> parameters ) ;
+
+  void setCredential(DynCallCredential credential) { }
 
 }
 
@@ -185,29 +213,45 @@ enum OnHttpErrorAnswer {
   ERROR,
 }
 
+abstract class HTTPOutputInterceptorWrapper<E> {
+  HTTPOutputInterceptorWrapper();
+  void interceptOutput(DynCallExecutor<E> executor, String outputOriginal, bool outputValid, String outputFiltered, Map<String,String> callParameters) ;
+}
+
 typedef OnHttpError = OnHttpErrorAnswer Function( HttpError error ) ;
 
+typedef HTTPOutputInterceptor<E> = void Function(DynCallExecutor<E> executor, String outputOriginal, bool outputValid, String outputFiltered, Map<String,String> callParameters) ;
 typedef HTTPOutputValidator = bool Function(String output, Map<String,String> callParameters) ;
 typedef HTTPOutputFilter = String Function(String output, Map<String,String> callParameters) ;
+
+typedef BodyPatternFunctionString = String Function(Map<String,String> callParameters) ;
+typedef BodyPatternFunctionDynamic = dynamic Function(Map<String,String> callParameters) ;
+
+typedef BodyPatternFunctionSimpleString = String Function() ;
+typedef BodyPatternFunctionSimpleDynamic = dynamic Function() ;
 
 class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
   HttpClient httpClient ;
   HttpMethod method ;
   String path ;
+  bool fullPath ;
   Map<String,String> parametersMap ;
+  Map<String,String> parametersStatic ;
+  Credential authorization ;
   List<String> authorizationFields ;
-  String body ;
-  String bodyPattern ;
+  dynamic body ;
+  dynamic bodyPattern ;
   String bodyType ;
   HTTPOutputValidator outputValidator ;
   HTTPOutputFilter outputFilter ;
   String outputFilterPattern ;
+  HTTPOutputInterceptor<E> outputInterceptor ;
   E errorResponse ;
   int errorMaxRetries ;
   OnHttpError onHttpError ;
 
-  DynCallHttpExecutor(this.httpClient, this.method, this.path, { this.parametersMap, this.authorizationFields, this.body, this.bodyPattern, this.bodyType, this.outputValidator, this.outputFilter, this.outputFilterPattern, this.errorResponse , this.errorMaxRetries = 3 , this.onHttpError } );
+  DynCallHttpExecutor(this.httpClient, this.method, this.path, { this.fullPath, this.parametersMap, this.parametersStatic, this.authorization, this.authorizationFields, this.body, this.bodyPattern, this.bodyType, this.outputValidator, this.outputFilter, this.outputFilterPattern, this.outputInterceptor, this.errorResponse , this.errorMaxRetries = 3 , this.onHttpError } );
 
   @override
   Future<E> call<X>(DynCall<E,X> sysCall, Map<String,String> callParameters) {
@@ -226,9 +270,18 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  Future<E> _callNoRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, String body, String bodyType) {
+  @override
+  void setCredential(DynCallCredential credential) {
+    if ( credential is DynCallCredentialHTTP ) {
+      var httpCredential = credential.credential;
+      authorization = httpCredential ;
+      httpClient.authorization = httpCredential ;
+    }
+  }
 
-    var response = httpClient.request(method, path, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
+  Future<E> _callNoRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType) {
+
+    var response = httpClient.request(method, path, fullPath: fullPath, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
 
     return response
         .then( (r) => _processResponse(sysCall, callParameters, r.body) )
@@ -248,7 +301,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         } ) ;
   }
 
-  Future<E> _callWithRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, String body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
+  Future<E> _callWithRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
     var delay = errors.length <= 2 ? 200 : 500 ;
 
     if (maxErrorRetries <= 0) {
@@ -272,9 +325,9 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  Future<E> _callWithRetriesImpl<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, body, bodyType, int maxErrorRetries, List<HttpError> errors ) {
+  Future<E> _callWithRetriesImpl<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
 
-    var response = httpClient.request(method, path, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
+    var response = httpClient.request(method, path, fullPath: fullPath, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
 
     return response
         .then( (r) => _processResponse(sysCall, callParameters, r.body) )
@@ -292,7 +345,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
             return _processError(sysCall, e);
           }
           else {
-            throw StateError("Invalid OnHttpErrorResponse: $errorAnswer") ;
+            throw StateError('Invalid OnHttpErrorResponse: $errorAnswer') ;
           }
         } ) ;
   }
@@ -314,8 +367,13 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   E _processResponse<O>(DynCall<E,O> sysCall, Map<String,String> callParameters, String responseContent) {
     if (outputValidator != null) {
       var valid = outputValidator(responseContent, callParameters) ;
-      if (!valid) return null ;
+      if (!valid) {
+        _callOutputInterceptor(responseContent, false, responseContent, callParameters);
+        return null ;
+      }
     }
+
+    var responseContentOriginal = responseContent ;
 
     if (outputFilter != null) {
       responseContent = outputFilter(responseContent, callParameters) ;
@@ -323,7 +381,22 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     else if (outputFilterPattern != null) {
       responseContent = buildStringPattern(outputFilterPattern, callParameters) ;
     }
+
+    _callOutputInterceptor(responseContentOriginal, true, responseContent, callParameters);
+
     return sysCall.parseExecution(responseContent);
+  }
+
+  void _callOutputInterceptor(String outputOriginal, bool outputValid, String outputFiltered, Map<String, String> callParameters) {
+    if (outputInterceptor != null) {
+      try {
+        outputInterceptor(this, outputOriginal, outputValid, outputFiltered, callParameters) ;
+      }
+      catch(e,s) {
+        print(e) ;
+        print(s) ;
+      }
+    }
   }
 
   E _processError<O>(DynCall<E,O> sysCall, HttpError error) {
@@ -331,11 +404,17 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   }
 
   Map<String, String> buildParameters(Map<String, String> parameters) {
-    if (parametersMap == null) return null ;
+    if (parametersMap == null && parametersStatic == null) return null ;
 
+    // ignore: omit_local_variable_types
     Set<String> processedKeys = {} ;
 
+    // ignore: omit_local_variable_types
     Map<String,String> requestParameters = {} ;
+
+    if (parametersStatic != null && parametersStatic.isNotEmpty) {
+      requestParameters.addAll( parametersStatic ) ;
+    }
 
     for ( var key in parametersMap.keys ) {
       var key2 = parametersMap[key] ;
@@ -363,6 +442,15 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   }
 
   Credential buildAuthorization(Map<String, String> parameters) {
+    if ( authorization != null ) {
+      return authorization ;
+    }
+    else {
+      return buildAuthorizationWithFields(parameters) ;
+    }
+  }
+
+  Credential buildAuthorizationWithFields(Map<String, String> parameters) {
     if (authorizationFields == null || authorizationFields.isEmpty) return null ;
 
     var fieldUser = authorizationFields[0] ?? 'username' ;
@@ -378,11 +466,28 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     return null ;
   }
 
-  String buildBody(Map<String, String> parameters) {
+  dynamic buildBody(Map<String, String> parameters) {
     if (body != null) return body ;
     if (bodyPattern == null) return null ;
 
-    return buildStringPattern(bodyPattern, parameters) ;
+    if (bodyPattern is String) {
+      return buildStringPattern(bodyPattern, parameters) ;
+    }
+    else if (bodyPattern is BodyPatternFunctionString ) {
+      return bodyPattern(parameters) ;
+    }
+    else if (bodyPattern is BodyPatternFunctionDynamic ) {
+      return bodyPattern(parameters) ;
+    }
+    else if (bodyPattern is BodyPatternFunctionSimpleString ) {
+      return bodyPattern(parameters) ;
+    }
+    else if (bodyPattern is BodyPatternFunctionSimpleDynamic ) {
+      return bodyPattern(parameters) ;
+    }
+    else {
+      return null ;
+    }
   }
 
   String buildBodyType(String body) {
@@ -404,6 +509,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
 }
 
+typedef ExecutorWrapper = DynCallExecutor Function(DynCallExecutor executor) ;
 
 class DynCallHttpExecutorFactory {
 
@@ -415,22 +521,44 @@ class DynCallHttpExecutorFactory {
     _basePath = _normalizePath(basePath) ;
   }
 
-  String _normalizePath(String basePath) => basePath != null ? basePath.trim() : null;
+  String _normalizePath(String path) => path != null ? path.trim() : null;
+
+  String _notEmpty(String s, [bool trim = false]) => s != null && s.isNotEmpty && ( !trim || s.trim().isNotEmpty ) ? s : null ;
 
   String get basePath => _basePath ;
 
-  DynCallHttpExecutor<E> create<E>( HttpMethod method, { String path, Map<String,String> parametersMap, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 , HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter , String outputFilterPattern } ) {
-    path = _normalizePath(path) ;
-    var callPath = _basePath != null && _basePath.isNotEmpty ? '$_basePath$path' : path ;
+  DynCallHttpExecutor<E> create<E>( HttpMethod method, { String path, String fullPath, Map<String,String> parametersMap, Map<String,String> parametersStatic, Credential authorization, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 , HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter , String outputFilterPattern , HTTPOutputInterceptor outputInterceptor } ) {
+    path = _notEmpty(path) ;
+    fullPath = _notEmpty(fullPath) ;
+
+    var callPath ;
+    var callFullPath ;
+
+    if (fullPath != null) {
+      fullPath = _normalizePath(fullPath) ;
+      callPath = fullPath ;
+      callFullPath = true ;
+    }
+    else {
+      path = _normalizePath(path) ;
+      callPath = _basePath != null && _basePath.isNotEmpty ? '$_basePath$path' : path ;
+      callFullPath = false ;
+    }
 
     // ignore: omit_local_variable_types
-    DynCallHttpExecutor<E> executor = DynCallHttpExecutor(httpClient, method, callPath, parametersMap: parametersMap, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries, outputValidator: outputValidator, outputFilter: outputFilter , outputFilterPattern: outputFilterPattern );
+    DynCallHttpExecutor<E> executor = DynCallHttpExecutor(httpClient, method, callPath, fullPath: callFullPath, parametersMap: parametersMap, parametersStatic: parametersStatic, authorization: authorization, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries, outputValidator: outputValidator, outputFilter: outputFilter , outputFilterPattern: outputFilterPattern , outputInterceptor: outputInterceptor );
     return executor ;
   }
 
-  DynCallHttpExecutor<E> define<E,O>( DynCall<E,O> call , HttpMethod method, { String path, Map<String,String> parametersMap, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 ,  HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter , String outputFilterPattern } ) {
+  DynCallExecutor<E> define<E,O>( DynCall<E,O> call , HttpMethod method, { String path, String fullPath, Map<String,String> parametersMap, Map<String,String> parametersStatic, Credential authorization, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 ,  HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter , String outputFilterPattern , HTTPOutputInterceptor outputInterceptor , ExecutorWrapper executorWrapper } ) {
     // ignore: omit_local_variable_types
-    DynCallHttpExecutor<E> executor = create(method, path: path, parametersMap: parametersMap, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries , outputValidator: outputValidator, outputFilter: outputFilter , outputFilterPattern: outputFilterPattern );
+    DynCallExecutor<E> executor = create(method, path: path, fullPath: fullPath, parametersMap: parametersMap, parametersStatic: parametersStatic, authorization: authorization, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries , outputValidator: outputValidator, outputFilter: outputFilter , outputFilterPattern: outputFilterPattern , outputInterceptor: outputInterceptor );
+
+    if (executorWrapper != null) {
+      var executor2 = executorWrapper(executor) as DynCallExecutor<E> ;
+      if (executor2 != null) executor = executor2 ;
+    }
+
     call.executor = executor ;
     return executor ;
   }
@@ -446,8 +574,31 @@ class DynCallHttpExecutorFactory_builder<E,O> {
 
   DynCallHttpExecutorFactory_builder(this.factory, this.call);
 
-  DynCallHttpExecutor<E> executor( HttpMethod method, { String path, Map<String,String> parametersMap, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 , HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter, String outputFilterPattern } ) {
-    return factory.define( call, method, path: path, parametersMap: parametersMap, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries, outputValidator: outputValidator, outputFilter: outputFilter, outputFilterPattern: outputFilterPattern ) ;
+  DynCallExecutor<E> executor( HttpMethod method, { String path, String fullPath, Map<String,String> parametersMap, Map<String,String> parametersStatic, Credential authorization, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 , HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter, String outputFilterPattern } ) {
+    return factory.define( call, method, path: path, fullPath: fullPath, parametersMap: parametersMap, parametersStatic: parametersStatic, authorization: authorization, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries, outputValidator: outputValidator, outputFilter: outputFilter, outputFilterPattern: outputFilterPattern ) ;
+  }
+
+  DynCallExecutor<E> authorizationExecutor( DynCallCredentialParser<E> credentialParser, HttpMethod method, { String path, String fullPath, Map<String,String> parametersMap, Map<String,String> parametersStatic, Credential authorization, List<String> authorizationFields, String body, String bodyPattern, String bodyType, E errorResponse , int errorMaxRetries = 3 , HTTPOutputValidator outputValidator, HTTPOutputFilter outputFilter, String outputFilterPattern } ) {
+    var credentialInterceptor = _CredentialInterceptor(credentialParser) ;
+
+    return factory.define( call, method, path: path, fullPath: fullPath, parametersMap: parametersMap, parametersStatic: parametersStatic, authorization: authorization, authorizationFields: authorizationFields, body: body, bodyPattern: bodyPattern, bodyType: bodyType, errorResponse: errorResponse, errorMaxRetries: errorMaxRetries, outputValidator: outputValidator, outputFilter: outputFilter, outputFilterPattern: outputFilterPattern ,
+      outputInterceptor: credentialInterceptor.interceptOutput
+    ) ;
+  }
+
+}
+
+class _CredentialInterceptor<E> extends HTTPOutputInterceptorWrapper<E> {
+  final DynCallCredentialParser<E> _credentialParser ;
+  _CredentialInterceptor(this._credentialParser) : super();
+
+  @override
+  void interceptOutput(DynCallExecutor<E> executor, String outputOriginal, bool outputValid, String outputFiltered, Map<String, String> callParameters) {
+    var credential = _credentialParser( executor, outputOriginal, outputValid, outputFiltered , callParameters );
+
+    if (credential != null) {
+      executor.setCredential(credential) ;
+    }
   }
 
 }
