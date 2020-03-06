@@ -1,3 +1,7 @@
+## 1.0.5
+
+- mercury_client: ^1.1.1
+
 ## 1.0.4
 
 - DynCallHttpExecutor: dynamic body, dynamic bodyPattern (String or Function), fullPath, outputInterceptor, setCredential(), authorizationFields
