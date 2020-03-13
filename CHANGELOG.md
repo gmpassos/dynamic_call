@@ -1,3 +1,7 @@
+## 1.0.6
+
+- mercury_client: ^1.1.2
+
 ## 1.0.5
 
 - mercury_client: ^1.1.1
