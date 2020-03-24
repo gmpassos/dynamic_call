@@ -1,6 +1,7 @@
 
 import 'dart:convert' show jsonDecode ;
 import 'package:mercury_client/mercury_client.dart';
+import 'package:swiss_knife/swiss_knife.dart';
 
 enum DynCallType {
   BOOL,
@@ -188,7 +189,7 @@ typedef DynCallCredentialParser<E> = DynCallCredential Function( String output, 
 
 abstract class DynCallExecutor<E> {
 
-  Future<E> call<X>( DynCall<E,X> sysCall , Map<String,String> parameters ) ;
+  Future<E> call<X>( DynCall<E,X> dynCall , Map<String,String> parameters ) ;
 
   void setCredential(DynCallCredential credential) { }
 
@@ -200,7 +201,7 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   DynCallStaticExecutor(this.response);
 
   @override
-  Future<E> call<X>(DynCall<E, X> sysCall, Map<String, String> parameters) {
+  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters) {
     return Future.value(response) ;
   }
 }
@@ -262,7 +263,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   DynCallHttpExecutor(this.httpClient, this.method, this.path, { this.fullPath, this.parametersMap, this.parametersStatic, this.authorization, this.authorizationFields, this.body, this.bodyPattern, this.bodyType, this.outputValidator, this.outputFilter, this.outputFilterPattern, this.outputInterceptor, this.errorResponse , this.errorMaxRetries = 3 , this.onHttpError } );
 
   @override
-  Future<E> call<X>(DynCall<E,X> sysCall, Map<String,String> callParameters) {
+  Future<E> call<X>(DynCall<E,X> dynCall, Map<String,String> callParameters) {
     var requestParameters = buildParameters(callParameters) ;
     var authorization = buildAuthorization(callParameters) ;
     var body = buildBody(callParameters) ;
@@ -270,11 +271,11 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
     var maxRetries = errorMaxRetries != null && errorMaxRetries > 0 ? errorMaxRetries : 0 ;
 
-    if (maxRetries > 0 && sysCall.allowRetries) {
-      return _callWithRetries(sysCall, callParameters, authorization, requestParameters, body, bodyType, maxRetries, []) ;
+    if (maxRetries > 0 && dynCall.allowRetries) {
+      return _callWithRetries(dynCall, callParameters, authorization, requestParameters, body, bodyType, maxRetries, []) ;
     }
     else {
-      return _callNoRetries(sysCall, callParameters, authorization, requestParameters, body, bodyType) ;
+      return _callNoRetries(dynCall, callParameters, authorization, requestParameters, body, bodyType) ;
     }
   }
 
@@ -287,21 +288,23 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  Future<E> _callNoRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType) {
+  Future<E> _callNoRetries<X>(DynCall<E,X> dynCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType) {
 
     var response = httpClient.request(method, path, fullPath: fullPath, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
 
     return response
-        .then( (r) => _processResponse(sysCall, callParameters, r.body) )
+        .then( (r) => _processResponse(dynCall, callParameters, r.body) )
         .catchError( (e) {
+          var httpError = e is HttpError ? e : null;
+
           var onHttpError = this.onHttpError ?? _onHttpError ;
-          var errorAnswer = onHttpError( e is HttpError ? e : null ) ;
+          var errorAnswer = onHttpError( httpError ) ;
 
           if (errorAnswer == OnHttpErrorAnswer.NO_CONTENT) {
-            return _processResponse(sysCall, callParameters,  null) ;
+            return _processResponse(dynCall, callParameters,  null) ;
           }
           else if (errorAnswer == OnHttpErrorAnswer.ERROR || errorAnswer == OnHttpErrorAnswer.RETRY) {
-            return _processError(sysCall, e);
+            return _processError(dynCall, httpError);
           }
           else {
             throw StateError('Invalid OnHttpErrorResponse: $errorAnswer') ;
@@ -309,48 +312,50 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         } ) ;
   }
 
-  Future<E> _callWithRetries<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
+  Future<E> _callWithRetries<X>(DynCall<E,X> dynCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
     var delay = errors.length <= 2 ? 200 : 500 ;
 
     if (maxErrorRetries <= 0) {
       if ( errors.isEmpty ) {
-        return _callNoRetries(sysCall, callParameters, authorization, requestParameters, body, bodyType);
+        return _callNoRetries(dynCall, callParameters, authorization, requestParameters, body, bodyType);
       }
       else {
         //print("delay... $delay");
-        return Future.delayed( Duration( milliseconds: delay ) , () => _callNoRetries(sysCall, callParameters, authorization, requestParameters, body, bodyType) ) ;
+        return Future.delayed( Duration( milliseconds: delay ) , () => _callNoRetries(dynCall, callParameters, authorization, requestParameters, body, bodyType) ) ;
       }
     }
 
     //print("_callWithRetries> $method $path > maxErrorRetries: $maxErrorRetries ; errors: $errors");
 
     if ( errors.isEmpty ) {
-      return _callWithRetriesImpl(sysCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries, errors) ;
+      return _callWithRetriesImpl(dynCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries, errors) ;
     }
     else {
       //print("delay... $delay");
-      return Future.delayed( Duration( milliseconds: delay ) , () => _callWithRetriesImpl(sysCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries, errors) ) ;
+      return Future.delayed( Duration( milliseconds: delay ) , () => _callWithRetriesImpl(dynCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries, errors) ) ;
     }
   }
 
-  Future<E> _callWithRetriesImpl<X>(DynCall<E,X> sysCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
+  Future<E> _callWithRetriesImpl<X>(DynCall<E,X> dynCall, Map<String,String> callParameters, Credential authorization, Map<String,String> requestParameters, dynamic body, String bodyType, int maxErrorRetries, List<HttpError> errors ) {
 
     var response = httpClient.request(method, path, fullPath: fullPath, authorization: authorization, queryParameters: requestParameters, body: body, contentType: bodyType) ;
 
     return response
-        .then( (r) => _processResponse(sysCall, callParameters, r.body) )
+        .then( (r) => _processResponse(dynCall, callParameters, r.body) )
         .catchError( (e) {
+          var httpError = e is HttpError ? e : null;
+
           var onHttpError = this.onHttpError ?? _onHttpError ;
-          var errorAnswer = onHttpError( e is HttpError ? e : null ) ;
+          var errorAnswer = onHttpError( httpError ) ;
 
           if (errorAnswer == OnHttpErrorAnswer.NO_CONTENT) {
-            return _processResponse(sysCall, callParameters, null) ;
+            return _processResponse(dynCall, callParameters, null) ;
           }
           else if (errorAnswer == OnHttpErrorAnswer.RETRY) {
-            return _callWithRetries(sysCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries-1, errors..add(e) ) ;
+            return _callWithRetries(dynCall, callParameters, authorization, requestParameters, body, bodyType, maxErrorRetries-1, errors..add(e) ) ;
           }
           else if (errorAnswer == OnHttpErrorAnswer.ERROR) {
-            return _processError(sysCall, e);
+            return _processError(dynCall, httpError);
           }
           else {
             throw StateError('Invalid OnHttpErrorResponse: $errorAnswer') ;
@@ -372,7 +377,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  E _processResponse<O>(DynCall<E,O> sysCall, Map<String,String> callParameters, String responseContent) {
+  E _processResponse<O>(DynCall<E,O> dynCall, Map<String,String> callParameters, String responseContent) {
     if (outputValidator != null) {
       var valid = outputValidator(responseContent, callParameters) ;
       if (!valid) {
@@ -387,12 +392,22 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       responseContent = outputFilter(responseContent, callParameters) ;
     }
     else if (outputFilterPattern != null) {
-      responseContent = buildStringPattern(outputFilterPattern, callParameters) ;
+      var json ;
+      if ( dynCall.outputType == DynCallType.JSON ) {
+        json = jsonDecode(responseContent) ;
+      }
+
+      if (json is Map) {
+        responseContent = buildStringPattern(outputFilterPattern, callParameters, [json]) ;
+      }
+      else {
+        responseContent = buildStringPattern(outputFilterPattern, callParameters) ;
+      }
     }
 
     _callOutputInterceptor(responseContentOriginal, true, responseContent, callParameters);
 
-    return sysCall.parseExecution(responseContent);
+    return dynCall.parseExecution(responseContent);
   }
 
   void _callOutputInterceptor(String outputOriginal, bool outputValid, String outputFiltered, Map<String, String> callParameters) {
@@ -407,8 +422,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  E _processError<O>(DynCall<E,O> sysCall, HttpError error) {
-    return sysCall.parseExecution(errorResponse) ;
+  E _processError<O>(DynCall<E,O> dynCall, HttpError error) {
+    return dynCall.parseExecution(errorResponse) ;
   }
 
   Map<String, String> buildParameters(Map<String, String> parameters) {
@@ -613,29 +628,3 @@ class _CredentialInterceptor<E> extends HTTPOutputInterceptorWrapper<E> {
 
 }
 
-String buildStringPattern(String pattern, Map<String, String> parameters) {
-  if (pattern == null) return null ;
-
-  var matches = RegExp(r'{{(\w+)}}').allMatches(pattern) ;
-
-  var strFilled = '' ;
-
-  var pos = 0 ;
-  for (var match in matches) {
-    var prev = pattern.substring(pos, match.start) ;
-    strFilled += prev ;
-
-    var varName = match.group(1) ;
-    var val = parameters[varName] ;
-    strFilled += val ;
-
-    pos = match.end ;
-  }
-
-  if (pos < pattern.length) {
-    var prev = pattern.substring(pos) ;
-    strFilled += prev ;
-  }
-
-  return strFilled ;
-}

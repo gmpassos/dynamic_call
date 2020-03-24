@@ -1,3 +1,9 @@
+## 1.0.7
+
+- DynCallHttpExecutor.outputFilterPattern now accepts variables from request response JSON ( if dynCall.outputType == DynCallType.JSON ).
+- mercury_client: ^1.1.4
+- swiss_knife: ^2.3.9
+
 ## 1.0.6
 
 - mercury_client: ^1.1.2
