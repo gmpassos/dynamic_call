@@ -166,8 +166,6 @@ class DynCall<E, O> {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
 /// Abstract class for credentials.
 abstract class DynCallCredential {
   bool applyCredential(DynCallExecutor executor);
