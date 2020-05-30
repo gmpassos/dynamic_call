@@ -73,8 +73,9 @@ class DynCall<E, O> {
     // ignore: omit_local_variable_types
     Map<String, String> callParameters = {};
 
-    if (inputParameters == null || inputParameters.isEmpty)
+    if (inputParameters == null || inputParameters.isEmpty) {
       return callParameters;
+    }
 
     for (var k in input) {
       var val = inputParameters[k];
