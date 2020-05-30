@@ -7,32 +7,41 @@ enum DynCallType { BOOL, STRING, INTEGER, DECIMAL, JSON }
 
 typedef SysCallOutputFilter<O, E> = O Function(E output);
 
+/// Callback function.
 typedef SysCallCallback<O> = void Function(
     O output, Map<String, dynamic> parameters);
 
+/// A Dynamic Call specification
 class DynCall<E, O> {
+  /// Input fields of the call.
   final List<String> input;
 
+  /// Type of the output.
   final DynCallType outputType;
 
+  /// Output filter, to transform from [E] to [O].
   final SysCallOutputFilter<O, E> outputFilter;
 
   final bool _allowRetries;
 
-  DynCall(this.input, this.outputType, [this.outputFilter, this._allowRetries]);
+  DynCall(this.input, this.outputType, {this.outputFilter, bool allowRetries})
+      : _allowRetries = allowRetries ?? false;
 
+  /// If [true] allows retries of the call. Recommended only for call that
+  /// won't make changes to the system.
   bool get allowRetries => _allowRetries ?? false;
 
   DynCallExecutor<E> executor;
 
+  /// Executes the call using [inputParameters] (with fields specified at [input]) and calling [callback] after.
   Future<O> call(
-      [Map<String, dynamic> parameters, SysCallCallback<O> callback]) {
+      [Map<String, dynamic> inputParameters, SysCallCallback<O> callback]) {
     if (executor == null) {
       var out = parseOutput(null);
 
       if (callback != null) {
         try {
-          callback(out, parameters);
+          callback(out, inputParameters);
         } catch (e) {
           print(e);
         }
@@ -41,7 +50,7 @@ class DynCall<E, O> {
       return Future.value(out);
     }
 
-    var callParameters = buildCallParameters(parameters);
+    var callParameters = buildCallParameters(inputParameters);
 
     var call = executor.call(this, callParameters);
     var calMapped = call.then(mapOutput);
@@ -50,7 +59,7 @@ class DynCall<E, O> {
 
     return calMapped.then((out) {
       try {
-        callback(out, parameters);
+        callback(out, inputParameters);
       } catch (e) {
         print(e);
       }
@@ -58,14 +67,17 @@ class DynCall<E, O> {
     });
   }
 
-  Map<String, String> buildCallParameters(Map<String, dynamic> parameters) {
+  /// Build call parameters using [inputParameters].
+  Map<String, String> buildCallParameters(
+      Map<String, dynamic> inputParameters) {
     // ignore: omit_local_variable_types
     Map<String, String> callParameters = {};
 
-    if (parameters == null || parameters.isEmpty) return callParameters;
+    if (inputParameters == null || inputParameters.isEmpty)
+      return callParameters;
 
     for (var k in input) {
-      var val = parameters[k];
+      var val = inputParameters[k];
       if (val != null) {
         callParameters[k] = '$val';
       }
@@ -74,9 +86,9 @@ class DynCall<E, O> {
     return callParameters;
   }
 
+  /// Parses the output of the call to the [outputType] and applying [outputFilter] if needed.
   O parseOutput(dynamic value) {
     var out = parseExecution(value);
-
     return mapOutput(out);
   }
 
@@ -88,6 +100,7 @@ class DynCall<E, O> {
     }
   }
 
+  /// Parses a value to the [outputType].
   E parseExecution(dynamic value) {
     switch (outputType) {
       case DynCallType.BOOL:
@@ -154,10 +167,12 @@ class DynCall<E, O> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/// Abstract class for credentials.
 abstract class DynCallCredential {
   bool applyCredential(DynCallExecutor executor);
 }
 
+/// A HTTP Credential.
 class DynCallCredentialHTTP extends DynCallCredential {
   final Credential credential;
 
@@ -189,12 +204,14 @@ class DynCallCredentialHTTP extends DynCallCredential {
 typedef DynCallCredentialParser<E> = DynCallCredential Function(
     String output, String outputFiltered, Map<String, String> parameters);
 
+/// Abstract class for the executor implementation.
 abstract class DynCallExecutor<E> {
   Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters);
 
   void setCredential(DynCallCredential credential) {}
 }
 
+/// Static [DynCallExecutor], with predefined results.
 class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   final E response;
 
@@ -206,6 +223,7 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   }
 }
 
+/// A HTTP Client for DynCallHttpExecutor calls.
 class DynCallHttpClient extends HttpClient {
   DynCallHttpClient(String baseURL, [HttpClientRequester clientRequester])
       : super(baseURL, clientRequester);
@@ -223,6 +241,7 @@ class DynCallHttpClient extends HttpClient {
   }
 }
 
+/// Specify an HTTP error.
 enum OnHttpErrorAnswer {
   NO_CONTENT,
   RETRY,
@@ -261,41 +280,60 @@ typedef BodyPatternFunctionDynamic = dynamic Function(
 typedef BodyPatternFunctionSimpleString = String Function();
 typedef BodyPatternFunctionSimpleDynamic = dynamic Function();
 
+/// A [DynCallExecutor] for HTTP calls.
 class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
+  /// The HTTP client.
   HttpClient httpClient;
 
+  /// HTTP Method.
   HttpMethod method;
 
+  /// Call path.
   String path;
 
+  /// Call full path (to overwrite client basePath).
   bool fullPath;
 
+  /// Maps input to query parameters.
   Map<String, String> parametersMap;
 
+  /// Query parameters with static values.
   Map<String, String> parametersStatic;
 
+  /// The Credential for the HTTP request.
   Credential authorization;
 
+  /// Specify call parameters to use as [authorizationFields].
   List<String> authorizationFields;
 
+  /// Body of the request.
   dynamic body;
 
+  /// Body pattern for the request.
   dynamic bodyPattern;
 
+  /// Body type. Example: JSON.
   String bodyType;
 
+  /// Function to validate if the request output is valid.
   HTTPOutputValidator outputValidator;
 
+  /// Filter for the output, to transform the request response.
   HTTPOutputFilter outputFilter;
 
+  /// Filter for the output, to transform the request response using a pattern.
   String outputFilterPattern;
 
+  /// Function called for any output received. Useful for logs.
   HTTPOutputInterceptor<E> outputInterceptor;
 
+  /// Call response in case of an error.
   E errorResponse;
 
+  /// Maximum number o retries for the call.
   int errorMaxRetries;
 
+  /// In case of error what behavior to follow: [OnHttpErrorAnswer]
   OnHttpError onHttpError;
 
   DynCallHttpExecutor(this.httpClient, this.method, this.path,
@@ -631,9 +669,12 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
 typedef ExecutorWrapper = DynCallExecutor Function(DynCallExecutor executor);
 
+/// A Factory that helps to define/attach HTTP executors to calls.
 class DynCallHttpExecutorFactory {
+  /// The HTTP client.
   final HttpClient httpClient;
 
+  /// Base path of the requests.
   String _basePath;
 
   DynCallHttpExecutorFactory(this.httpClient, [String basePath]) {
@@ -744,17 +785,24 @@ class DynCallHttpExecutorFactory {
     return executor;
   }
 
+  /// Main method to use in the Factory. Returns a builder.
   DynCallHttpExecutorFactory_builder<E, O> call<E, O>(DynCall<E, O> call) =>
       DynCallHttpExecutorFactory_builder<E, O>(this, call);
 }
 
+/// The Builder returned by Factory `call(...)` method.
 class DynCallHttpExecutorFactory_builder<E, O> {
+  /// The HTTP Executor factory.
   final DynCallHttpExecutorFactory factory;
 
+  /// The call to define the executor.
   final DynCall<E, O> call;
 
+  /// This constructor shouldn't be used. Use the Factory method `call(...)`.
   DynCallHttpExecutorFactory_builder(this.factory, this.call);
 
+  /// Configure and define the call executor.
+  /// See [DynCallHttpExecutor] fields documentation.
   DynCallExecutor<E> executor(HttpMethod method,
       {String path,
       String fullPath,
@@ -787,6 +835,8 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         outputFilterPattern: outputFilterPattern);
   }
 
+  /// Configure and define the call executor, using an Authorization request.
+  /// See [DynCallHttpExecutor] fields documentation.
   DynCallExecutor<E> authorizationExecutor(
       DynCallCredentialParser<E> credentialParser, HttpMethod method,
       {String path,

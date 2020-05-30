@@ -1,3 +1,12 @@
+## 1.0.8
+
+  - Add example.
+  - Add API Documentation.
+  - sdk: '>=2.7.0 <3.0.0'
+  - dartfmt.
+  - mercury_client: ^1.1.7
+  - swiss_knife: ^2.4.1
+
 ## 1.0.7
 
 - DynCallHttpExecutor.outputFilterPattern now accepts variables from request response JSON ( if dynCall.outputType == DynCallType.JSON ).
