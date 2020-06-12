@@ -192,7 +192,8 @@ class DynCallCredentialHTTP extends DynCallCredential {
     if (credential == null) return false;
 
     if (executor is DynCallHttpExecutor) {
-      executor.httpClient.authorization = Authorization.fromCredential(credential) ;
+      executor.httpClient.authorization =
+          Authorization.fromCredential(credential);
       return true;
     }
 
@@ -201,7 +202,9 @@ class DynCallCredentialHTTP extends DynCallCredential {
 }
 
 typedef DynCallCredentialParser<E> = DynCallCredential Function(
-    String output, String outputFiltered, Map<String, String> parameters,
+    String output,
+    String outputFiltered,
+    Map<String, String> parameters,
     Map<String, String> requestParameters);
 
 /// Abstract class for the executor implementation.
@@ -269,10 +272,10 @@ typedef HTTPOutputInterceptor<E> = void Function(
     String outputFiltered,
     Map<String, String> callParameters,
     Map<String, String> requestParameters);
-typedef HTTPOutputValidator = bool Function(
-    String output, Map<String, String> callParameters, Map<String, String> requestParameters);
-typedef HTTPOutputFilter = String Function(
-    String output, Map<String, String> callParameters, Map<String, String> requestParameters);
+typedef HTTPOutputValidator = bool Function(String output,
+    Map<String, String> callParameters, Map<String, String> requestParameters);
+typedef HTTPOutputFilter = String Function(String output,
+    Map<String, String> callParameters, Map<String, String> requestParameters);
 
 typedef BodyPatternFunctionString = String Function(
     Map<String, String> callParameters, Map<String, String> requestParameters);
@@ -402,7 +405,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         contentType: bodyType);
 
     return response
-        .then((r) => _processResponse(dynCall, callParameters, requestParameters, r.body))
+        .then((r) => _processResponse(
+            dynCall, callParameters, requestParameters, r.body))
         .catchError((e) {
       var httpError = e is HttpError ? e : null;
 
@@ -410,7 +414,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       var errorAnswer = onHttpError(httpError);
 
       if (errorAnswer == OnHttpErrorAnswer.NO_CONTENT) {
-        return _processResponse(dynCall, callParameters, requestParameters, null);
+        return _processResponse(
+            dynCall, callParameters, requestParameters, null);
       } else if (errorAnswer == OnHttpErrorAnswer.ERROR ||
           errorAnswer == OnHttpErrorAnswer.RETRY) {
         return _processError(dynCall, httpError);
@@ -475,7 +480,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         contentType: bodyType);
 
     return response
-        .then((r) => _processResponse(dynCall, callParameters, requestParameters, r.body))
+        .then((r) => _processResponse(
+            dynCall, callParameters, requestParameters, r.body))
         .catchError((e, s) {
       var httpError = e is HttpError ? e : null;
 
@@ -488,7 +494,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       var errorAnswer = onHttpError(httpError);
 
       if (errorAnswer == OnHttpErrorAnswer.NO_CONTENT) {
-        return _processResponse(dynCall, callParameters, requestParameters, null);
+        return _processResponse(
+            dynCall, callParameters, requestParameters, null);
       } else if (errorAnswer == OnHttpErrorAnswer.RETRY) {
         return _callWithRetries(
             dynCall,
@@ -519,15 +526,17 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     }
   }
 
-  E _processResponse<O>(DynCall<E, O> dynCall,
+  E _processResponse<O>(
+      DynCall<E, O> dynCall,
       Map<String, String> callParameters,
       Map<String, String> requestParameters,
       String responseContent) {
     if (outputValidator != null) {
-      var valid = outputValidator(responseContent, callParameters, requestParameters);
+      var valid =
+          outputValidator(responseContent, callParameters, requestParameters);
       if (!valid) {
-        _callOutputInterceptor(
-            responseContent, false, responseContent, callParameters, requestParameters);
+        _callOutputInterceptor(responseContent, false, responseContent,
+            callParameters, requestParameters);
         return null;
       }
     }
@@ -535,7 +544,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     var responseContentOriginal = responseContent;
 
     if (outputFilter != null) {
-      responseContent = outputFilter(responseContent, callParameters, requestParameters);
+      responseContent =
+          outputFilter(responseContent, callParameters, requestParameters);
     } else if (outputFilterPattern != null) {
       var json;
       if (dynCall.outputType == DynCallType.JSON) {
@@ -543,27 +553,30 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       }
 
       if (json is Map) {
-        responseContent =
-            buildStringPattern(outputFilterPattern, callParameters, [json, requestParameters]);
+        responseContent = buildStringPattern(
+            outputFilterPattern, callParameters, [json, requestParameters]);
       } else {
         responseContent =
             buildStringPattern(outputFilterPattern, callParameters);
       }
     }
 
-    _callOutputInterceptor(
-        responseContentOriginal, true, responseContent, callParameters, requestParameters);
+    _callOutputInterceptor(responseContentOriginal, true, responseContent,
+        callParameters, requestParameters);
 
     return dynCall.parseExecution(responseContent);
   }
 
-  void _callOutputInterceptor(String outputOriginal, bool outputValid,
-      String outputFiltered, Map<String, String> callParameters,
+  void _callOutputInterceptor(
+      String outputOriginal,
+      bool outputValid,
+      String outputFiltered,
+      Map<String, String> callParameters,
       Map<String, String> requestParameters) {
     if (outputInterceptor != null) {
       try {
-        outputInterceptor(
-            this, outputOriginal, outputValid, outputFiltered, callParameters, requestParameters);
+        outputInterceptor(this, outputOriginal, outputValid, outputFiltered,
+            callParameters, requestParameters);
       } catch (e, s) {
         print(e);
         print(s);
@@ -576,17 +589,21 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   }
 
   Map<String, String> buildParameters(Map<String, String> parameters) {
-    var parametersMap = this.parametersMap ;
-    var parametersStatic = this.parametersStatic ;
-    var parametersProviders = this.parametersProviders ;
+    var parametersMap = this.parametersMap;
+    var parametersStatic = this.parametersStatic;
+    var parametersProviders = this.parametersProviders;
 
-    if (parametersMap == null && parametersStatic == null && parametersProviders == null) return null;
+    if (parametersMap == null &&
+        parametersStatic == null &&
+        parametersProviders == null) return null;
 
-    parametersMap ??= {} ;
-    parametersStatic ??= {} ;
-    parametersProviders ??= {} ;
+    parametersMap ??= {};
+    parametersStatic ??= {};
+    parametersProviders ??= {};
 
-    if (parametersMap.isEmpty && parametersStatic.isEmpty && parametersProviders.isEmpty) return null;
+    if (parametersMap.isEmpty &&
+        parametersStatic.isEmpty &&
+        parametersProviders.isEmpty) return null;
 
     var requestParameters = <String, String>{};
 
@@ -619,25 +636,23 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
     for (var key in parametersProviders.keys) {
       var provider = parametersProviders[key];
-      if (provider == null) continue ;
+      if (provider == null) continue;
 
       if (!processedKeys.contains(key)) {
-        String value ;
+        String value;
 
         try {
-          value = provider(key) ;
-        }
-        catch(e,s) {
+          value = provider(key);
+        } catch (e, s) {
           print(e);
           print(s);
         }
 
-        if ( requestParameters.containsKey(key) ) {
+        if (requestParameters.containsKey(key)) {
           if (value != null) {
             requestParameters[key] = value;
           }
-        }
-        else {
+        } else {
           requestParameters[key] = value;
         }
       }
@@ -672,23 +687,24 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     return null;
   }
 
-  dynamic buildBody(Map<String, String> parameters, [Map<String, String> requestParameters]) {
+  dynamic buildBody(Map<String, String> parameters,
+      [Map<String, String> requestParameters]) {
     if (body != null) return body;
     if (bodyPattern == null) return null;
 
     if (bodyPattern is String) {
       return buildStringPattern(bodyPattern, parameters, [requestParameters]);
     } else if (bodyPattern is BodyPatternFunctionString) {
-      BodyPatternFunctionString f = bodyPattern ;
+      BodyPatternFunctionString f = bodyPattern;
       return f(parameters, requestParameters);
     } else if (bodyPattern is BodyPatternFunctionDynamic) {
-      BodyPatternFunctionDynamic f = bodyPattern ;
+      BodyPatternFunctionDynamic f = bodyPattern;
       return f(parameters, requestParameters);
     } else if (bodyPattern is BodyPatternFunctionSimpleString) {
-      BodyPatternFunctionSimpleString f = bodyPattern ;
+      BodyPatternFunctionSimpleString f = bodyPattern;
       return f();
     } else if (bodyPattern is BodyPatternFunctionSimpleDynamic) {
-      BodyPatternFunctionSimpleDynamic f = bodyPattern ;
+      BodyPatternFunctionSimpleDynamic f = bodyPattern;
       return f();
     } else {
       return null;
@@ -713,7 +729,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   }
 }
 
-typedef ParameterProvider = String Function(String key) ;
+typedef ParameterProvider = String Function(String key);
 
 typedef ExecutorWrapper = DynCallExecutor Function(DynCallExecutor executor);
 
@@ -944,8 +960,8 @@ class _CredentialInterceptor<E> extends HTTPOutputInterceptorWrapper<E> {
       Map<String, String> callParameters,
       Map<String, String> requestParameters) {
     if (outputValid ?? false) {
-      var credential =
-          _credentialParser(outputOriginal, outputFiltered, callParameters, requestParameters);
+      var credential = _credentialParser(
+          outputOriginal, outputFiltered, callParameters, requestParameters);
 
       if (credential != null) {
         executor.setCredential(credential);

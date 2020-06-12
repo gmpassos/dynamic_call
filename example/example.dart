@@ -1,7 +1,6 @@
 import 'package:dynamic_call/dynamic_call.dart';
 
 class Sys {
-
   /// Defines a call with input field `query`, output as `STRING` and allows
   /// retries in case of errors.
   ///
