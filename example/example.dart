@@ -31,7 +31,7 @@ void main() async {
   executorFactory.call(sys.callSearch).executor(HttpMethod.GET,
       path: 'search',
       parametersMap: {'query': 'q'},
-      outputValidator: (r, p) => r != null && r.contains('<html'));
+      outputValidator: (r, p, rp) => r != null && r.contains('<html'));
 
   var response = await sys.doSearch('dart dynamic_call');
 

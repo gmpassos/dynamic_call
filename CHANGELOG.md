@@ -1,3 +1,11 @@
+## 1.0.10
+
+- Expose `requestParameters` for executor declaration.
+- Executors: `parametersProviders` for parameters values from functions.  
+- README.md badges.
+- mercury_client: ^1.1.8
+- swiss_knife: ^2.5.3
+
 ## 1.0.9
 
 - Fix README.md
