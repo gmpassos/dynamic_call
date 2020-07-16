@@ -1,3 +1,12 @@
+## 1.0.11
+
+- Added: `DynCallFunctionExecutor`.
+- Improved `DynCallHttpExecutor.bodyPattern`: renamed to `bodyBuilder`.
+- Added `DataSource`, `DataReceiver` and `DataRepository`.
+- mercury_client: ^1.1.9
+- swiss_knife: ^2.5.5
+- test_coverage: ^0.4.2
+
 ## 1.0.10
 
 - Expose `requestParameters` for executor declaration.
