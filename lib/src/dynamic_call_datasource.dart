@@ -448,7 +448,6 @@ class DataSourceDynCall<T> extends DataSource<T> {
   }
 }
 
-
 /// A [DataReceiver] based in a [DynCall] for requests.
 class DataReceiverDynCall<T> extends DataReceiver<T> {
   final DynCall<dynamic, List<T>> call;

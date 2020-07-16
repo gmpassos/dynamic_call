@@ -1,4 +1,4 @@
-import 'dart:io' as io ;
+import 'dart:io' as io;
 import 'dart:async';
 import 'dart:convert';
 
@@ -33,59 +33,54 @@ class TestServer {
     _serverOpen.complete(true);
 
     await for (io.HttpRequest request in server) {
-      var path = request.uri.path ;
-      var query = request.uri.queryParameters ;
+      var path = request.uri.path;
+      var query = request.uri.queryParameters;
       var contentType = request.headers.contentType;
       var body = await _decodeBody(contentType, request);
 
-      var response ;
-      
-      var mathFinByID = RegExp(r'get/(\d+)$').allMatches(path) ;
-      var mathFinByIDRange = RegExp(r'get/(\d+)..(\d+)$').allMatches(path) ;
+      var response;
 
-      if ( mathFinByID.isNotEmpty ) {
-        var id = mathFinByID.first.group(1) ;
-        response = '[$id]' ;
-      }
-      else if ( mathFinByIDRange.isNotEmpty ) {
-        var match = mathFinByIDRange.first ;
+      var mathFinByID = RegExp(r'get/(\d+)$').allMatches(path);
+      var mathFinByIDRange = RegExp(r'get/(\d+)..(\d+)$').allMatches(path);
 
-        var from = int.parse( match.group(1) ) ;
-        var to = int.parse( match.group(2) ) ;
+      if (mathFinByID.isNotEmpty) {
+        var id = mathFinByID.first.group(1);
+        response = '[$id]';
+      } else if (mathFinByIDRange.isNotEmpty) {
+        var match = mathFinByIDRange.first;
 
-        var list = <int>[] ;
-        for (var i = from ; i <= to; i++) {
-          list.add(i) ;
+        var from = int.parse(match.group(1));
+        var to = int.parse(match.group(2));
+
+        var list = <int>[];
+        for (var i = from; i <= to; i++) {
+          list.add(i);
         }
 
-        response = '['+ list.join(',') +']';
-      }
-      else if (path.endsWith('put')) {
+        response = '[' + list.join(',') + ']';
+      } else if (path.endsWith('put')) {
         if (body == null) {
-          response = 'null' ;
+          response = 'null';
+        } else {
+          response = RegExp(r'^\[.*?\]$').hasMatch(body) ? body : '[$body]';
         }
-        else {
-          response = RegExp(r'^\[.*?\]$').hasMatch(body) ? body : '[$body]' ;
+      } else if (query != null && query.isNotEmpty) {
+        if (query['name'] == 'joe') {
+          response = '[1001]';
+        } else if (query['name'] == 'smith') {
+          response = '[1002]';
+        } else {
+          response = 'null';
         }
-      }
-      else if ( query != null && query.isNotEmpty ) {
-        if ( query['name'] == 'joe' ) {
-          response = '[1001]' ;
-        }
-        else if ( query['name'] == 'smith' ) {
-          response = '[1002]' ;
-        }
-        else {
-          response = 'null' ;
-        }
-      }
-      else {
-        response = 'null' ;
+      } else {
+        response = 'null';
       }
 
-      print('TestServer{path: $path ; query: $query ; contentType: $contentType ; body: <$body> ; response: <$response>}') ;
+      print(
+          'TestServer{path: $path ; query: $query ; contentType: $contentType ; body: <$body> ; response: <$response>}');
 
-      request.response.headers.contentType = io.ContentType.parse('application/json') ;
+      request.response.headers.contentType =
+          io.ContentType.parse('application/json');
 
       request.response.write(response);
       await request.response.close();
@@ -119,11 +114,9 @@ class TestServer {
   }
 }
 
-
 void main() {
-
   group('DataRepository', () {
-    TestServer testServer ;
+    TestServer testServer;
 
     setUp(() {
       testServer = TestServer();
@@ -135,83 +128,79 @@ void main() {
     });
 
     test('DynCall', () async {
-
-      var callGet = DynCall<String, List<int>>(
-          [],
-          DynCallType.STRING,
-          outputFilter: (s) => parseIntsFromInlineList(s)
-      );
+      var callGet = DynCall<String, List<int>>([], DynCallType.STRING,
+          outputFilter: (s) => parseIntsFromInlineList(s));
 
       callGet.executor = DynCallStaticExecutor<String>('1,2,3,4,5,6');
 
-      var callPut = DynCall<String, List<int>>(
-          [],
-          DynCallType.STRING,
-          outputFilter: (s) => parseIntsFromInlineList(s)
-      );
+      var callPut = DynCall<String, List<int>>([], DynCallType.STRING,
+          outputFilter: (s) => parseIntsFromInlineList(s));
 
       callPut.executor = DynCallStaticExecutor<String>('10,11,12');
 
-      DataSource<int> source = DataSourceDynCall('', callGet) ;
-      DataReceiver<int> receiver = DataReceiverDynCall('', callPut) ;
+      DataSource<int> source = DataSourceDynCall('', callGet);
+      DataReceiver<int> receiver = DataReceiverDynCall('', callPut);
 
-      var repository = DataRepositoryWrapper('dynCall', source, receiver) ;
+      var repository = DataRepositoryWrapper('dynCall', source, receiver);
 
-      var got = await repository.get() ;
+      var got = await repository.get();
 
-      expect(got, equals([1,2,3,4,5,6]));
+      expect(got, equals([1, 2, 3, 4, 5, 6]));
 
-      var put = await repository.put( dataList: [10,11,12] ) ;
+      var put = await repository.put(dataList: [10, 11, 12]);
 
-      expect(put, equals([10,11,12]));
-
+      expect(put, equals([10, 11, 12]));
     });
-
 
     test('DataRepositoryWrapper(StaticExecutor)', () async {
+      DataSource<int> source = DataSourceExecutor<String, int>(
+          '', DynCallStaticExecutor<String>('1,2,3,4,5,6'))
+        ..transformerToList = (o) => parseIntsFromInlineList(o);
 
-      DataSource<int> source = DataSourceExecutor<String,int>('', DynCallStaticExecutor<String>('1,2,3,4,5,6') )
-        ..transformerToList = (o) => parseIntsFromInlineList(o)
-      ;
+      DataReceiver<int> receiver = DataReceiverExecutor<String, int>(
+          '', DynCallStaticExecutor<String>('10,11,12'))
+        ..transformerToList = (o) {
+          return parseIntsFromInlineList(o);
+        }
+        ..transformerFromList = (l) {
+          return l == null ? '' : l.join(',');
+        };
 
-      DataReceiver<int> receiver = DataReceiverExecutor<String,int>('', DynCallStaticExecutor<String>('10,11,12'))
-        ..transformerToList = (o) { return parseIntsFromInlineList(o) ;}
-        ..transformerFromList = (l) { return l == null ? '' : l.join(',') ;}
-      ;
+      var repository =
+          DataRepositoryWrapper('staticExecutor', source, receiver);
 
-      var repository = DataRepositoryWrapper('staticExecutor', source, receiver) ;
+      var got = await repository.get();
 
-      var got = await repository.get() ;
+      expect(got, equals([1, 2, 3, 4, 5, 6]));
 
-      expect(got, equals([1,2,3,4,5,6]));
+      var put = await repository.put(dataList: [10, 11, 12]);
 
-      var put = await repository.put( dataList: [10,11,12] ) ;
-
-      expect(put, equals([10,11,12]));
-
+      expect(put, equals([10, 11, 12]));
     });
-
 
     test('DataRepositoryWrapper(FunctionExecutor)', () async {
+      DataSource<int> source = DataSourceExecutor<String, int>(
+          '',
+          DynCallFunctionExecutor<String, dynamic>(
+              (d, p) async => '1,2,3,4,5,6'))
+        ..transformerToList = (o) => parseIntsFromInlineList(o);
 
-      DataSource<int> source = DataSourceExecutor<String,int>('', DynCallFunctionExecutor<String,dynamic>( (d,p) async => '1,2,3,4,5,6' ) )
-        ..transformerToList = (o) => parseIntsFromInlineList(o)
-      ;
+      DataReceiver<int> receiver = DataReceiverExecutor<List<int>, int>(
+          '',
+          DynCallFunctionExecutor<List<int>, dynamic>(
+              (d, p) async => [10, 11, 12]));
 
-      DataReceiver<int> receiver = DataReceiverExecutor<List<int>,int>('', DynCallFunctionExecutor<List<int>,dynamic>( (d,p) async => [10,11,12] ) );
+      var repository =
+          DataRepositoryWrapper('functionExecutor', source, receiver);
 
-      var repository = DataRepositoryWrapper('functionExecutor', source, receiver) ;
+      var got = await repository.get();
 
-      var got = await repository.get() ;
+      expect(got, equals([1, 2, 3, 4, 5, 6]));
 
-      expect(got, equals([1,2,3,4,5,6]));
+      var put = await repository.put(dataList: [10, 11, 12]);
 
-      var put = await repository.put( dataList: [10,11,12] ) ;
-
-      expect(put, equals([10,11,12]));
-
+      expect(put, equals([10, 11, 12]));
     });
-
 
     test('DataRepositoryWrapper(Http)', () async {
       testServer.waitOpen();
@@ -219,61 +208,60 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests');
 
       DataSource<int> source = DataSourceHttp('', client: client, path: 'get')
-        ..transformerToList = (o) { return parseIntsFromInlineList(o) ;}
-        ..transformerFromList = (l) { return l == null ? '' : l.join(',') ;}
-      ;
-      DataReceiver<int> receiver = DataReceiverHttp('', client: client,
-          method: HttpMethod.POST, path: 'put')
-        ..transformerToList = (o) { return parseIntsFromInlineList(o) ;}
-        ..transformerFromList = (l) { return l == null ? '' : l.join(',') ;}
-      ;
+        ..transformerToList = (o) {
+          return parseIntsFromInlineList(o);
+        }
+        ..transformerFromList = (l) {
+          return l == null ? '' : l.join(',');
+        };
+      DataReceiver<int> receiver = DataReceiverHttp('',
+          client: client, method: HttpMethod.POST, path: 'put')
+        ..transformerToList = (o) {
+          return parseIntsFromInlineList(o);
+        }
+        ..transformerFromList = (l) {
+          return l == null ? '' : l.join(',');
+        };
 
-      var repository = DataRepositoryWrapper('api_src_rcv', source, receiver) ;
+      var repository = DataRepositoryWrapper('api_src_rcv', source, receiver);
 
-      var findByID = await repository.findByID( 123 ) ;
+      var findByID = await repository.findByID(123);
       expect(findByID, equals([123]));
 
-      var findByIDRange = await repository.findByIDRange( 10, 20 ) ;
-      expect(findByIDRange, equals([10,11,12,13,14,15,16,17,18,19,20]));
+      var findByIDRange = await repository.findByIDRange(10, 20);
+      expect(
+          findByIDRange, equals([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]));
 
-      var find = await repository.find( {'name': 'joe'} ) ;
+      var find = await repository.find({'name': 'joe'});
       expect(find, equals([1001]));
 
-      var put = await repository.put( dataList: [1,2,3] ) ;
-      expect(put, equals([1,2,3]));
-
+      var put = await repository.put(dataList: [1, 2, 3]);
+      expect(put, equals([1, 2, 3]));
     });
-
 
     test('DataRepositoryHttp', () async {
       testServer.waitOpen();
 
       var client = HttpClient('http://localhost:${testServer.port}/tests');
 
-      var repository = DataRepositoryHttp('api_http', client: client,
-          sourcePath: 'get',
-          receiverPath: 'put',
+      var repository = DataRepositoryHttp(
+        'api_http',
+        client: client,
+        sourcePath: 'get',
+        receiverPath: 'put',
       );
 
-      var findByID = await repository.findByID( 110 ) ;
+      var findByID = await repository.findByID(110);
       expect(findByID, equals([110]));
 
-      var findByIDRange = await repository.findByIDRange( 1 , 10 ) ;
-      expect(findByIDRange, equals([1,2,3,4,5,6,7,8,9,10]));
+      var findByIDRange = await repository.findByIDRange(1, 10);
+      expect(findByIDRange, equals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
 
-      var find = await repository.find( {'name': 'smith'} ) ;
+      var find = await repository.find({'name': 'smith'});
       expect(find, equals([1002]));
 
-      var put = await repository.put( dataList: [1,2,3,4,5] ) ;
-      expect(put, equals([1,2,3,4,5]));
-
+      var put = await repository.put(dataList: [1, 2, 3, 4, 5]);
+      expect(put, equals([1, 2, 3, 4, 5]));
     });
-
   });
-
-
-
 }
-
-
-

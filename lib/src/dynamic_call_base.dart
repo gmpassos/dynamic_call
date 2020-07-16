@@ -226,17 +226,18 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   }
 }
 
-typedef DynCallFunction<R,T> = Future<R> Function(DynCall<R,T> dynCall, Map<String, String> parameters) ;
+typedef DynCallFunction<R, T> = Future<R> Function(
+    DynCall<R, T> dynCall, Map<String, String> parameters);
 
 /// A [DynCallExecutor] that calls a [DynCallFunction] for results.
-class DynCallFunctionExecutor<R,T> extends DynCallExecutor<R> {
-  final DynCallFunction<R,T> function ;
+class DynCallFunctionExecutor<R, T> extends DynCallExecutor<R> {
+  final DynCallFunction<R, T> function;
 
   DynCallFunctionExecutor(this.function);
 
   @override
-  Future<R> call<X>(DynCall<R,X> dynCall, Map<String, String> parameters) {
-    var dynCallCast = dynCall as DynCall<R,T> ;
+  Future<R> call<X>(DynCall<R, X> dynCall, Map<String, String> parameters) {
+    var dynCallCast = dynCall as DynCall<R, T>;
     return function(dynCallCast, parameters);
   }
 }
@@ -732,7 +733,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     var bodyType = this.bodyType.trim();
     if (bodyType.isEmpty) return null;
 
-    return MimeType.parseAsString(bodyType, bodyType) ;
+    return MimeType.parseAsString(bodyType, bodyType);
   }
 }
 

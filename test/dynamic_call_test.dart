@@ -1,7 +1,6 @@
 import 'package:dynamic_call/dynamic_call.dart';
 import 'package:test/test.dart';
 
-
 class UserLogin {
   int id;
 
@@ -44,10 +43,5 @@ void main() {
 
       expect(ok, isTrue);
     });
-
   });
-
 }
-
-
-
