@@ -226,6 +226,21 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   }
 }
 
+typedef DynCallFunction<R,T> = Future<R> Function(DynCall<R,T> dynCall, Map<String, String> parameters) ;
+
+/// A [DynCallExecutor] that calls a [DynCallFunction] for results.
+class DynCallFunctionExecutor<R,T> extends DynCallExecutor<R> {
+  final DynCallFunction<R,T> function ;
+
+  DynCallFunctionExecutor(this.function);
+
+  @override
+  Future<R> call<X>(DynCall<R,X> dynCall, Map<String, String> parameters) {
+    var dynCallCast = dynCall as DynCall<R,T> ;
+    return function(dynCallCast, parameters);
+  }
+}
+
 /// A HTTP Client for DynCallHttpExecutor calls.
 class DynCallHttpClient extends HttpClient {
   DynCallHttpClient(String baseURL, [HttpClientRequester clientRequester])
@@ -277,13 +292,13 @@ typedef HTTPOutputValidator = bool Function(String output,
 typedef HTTPOutputFilter = String Function(String output,
     Map<String, String> callParameters, Map<String, String> requestParameters);
 
-typedef BodyPatternFunctionString = String Function(
+typedef BodyBuilderFunctionString = String Function(
     Map<String, String> callParameters, Map<String, String> requestParameters);
-typedef BodyPatternFunctionDynamic = dynamic Function(
+typedef BodyBuilderFunctionDynamic = dynamic Function(
     Map<String, String> callParameters, Map<String, String> requestParameters);
 
-typedef BodyPatternFunctionSimpleString = String Function();
-typedef BodyPatternFunctionSimpleDynamic = dynamic Function();
+typedef BodyBuilderFunctionSimpleString = String Function();
+typedef BodyBuilderFunctionSimpleDynamic = dynamic Function();
 
 /// A [DynCallExecutor] for HTTP calls.
 class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
@@ -318,7 +333,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   dynamic body;
 
   /// Body pattern for the request.
-  dynamic bodyPattern;
+  dynamic bodyBuilder;
 
   /// Body type. Example: JSON.
   String bodyType;
@@ -352,7 +367,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       this.authorization,
       this.authorizationFields,
       this.body,
-      this.bodyPattern,
+      this.bodyBuilder,
       this.bodyType,
       this.outputValidator,
       this.outputFilter,
@@ -690,21 +705,21 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   dynamic buildBody(Map<String, String> parameters,
       [Map<String, String> requestParameters]) {
     if (body != null) return body;
-    if (bodyPattern == null) return null;
+    if (bodyBuilder == null) return null;
 
-    if (bodyPattern is String) {
-      return buildStringPattern(bodyPattern, parameters, [requestParameters]);
-    } else if (bodyPattern is BodyPatternFunctionString) {
-      BodyPatternFunctionString f = bodyPattern;
+    if (bodyBuilder is String) {
+      return buildStringPattern(bodyBuilder, parameters, [requestParameters]);
+    } else if (bodyBuilder is BodyBuilderFunctionString) {
+      BodyBuilderFunctionString f = bodyBuilder;
       return f(parameters, requestParameters);
-    } else if (bodyPattern is BodyPatternFunctionDynamic) {
-      BodyPatternFunctionDynamic f = bodyPattern;
+    } else if (bodyBuilder is BodyBuilderFunctionDynamic) {
+      BodyBuilderFunctionDynamic f = bodyBuilder;
       return f(parameters, requestParameters);
-    } else if (bodyPattern is BodyPatternFunctionSimpleString) {
-      BodyPatternFunctionSimpleString f = bodyPattern;
+    } else if (bodyBuilder is BodyBuilderFunctionSimpleString) {
+      BodyBuilderFunctionSimpleString f = bodyBuilder;
       return f();
-    } else if (bodyPattern is BodyPatternFunctionSimpleDynamic) {
-      BodyPatternFunctionSimpleDynamic f = bodyPattern;
+    } else if (bodyBuilder is BodyBuilderFunctionSimpleDynamic) {
+      BodyBuilderFunctionSimpleDynamic f = bodyBuilder;
       return f();
     } else {
       return null;
@@ -717,15 +732,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     var bodyType = this.bodyType.trim();
     if (bodyType.isEmpty) return null;
 
-    var bodyTypeLC = bodyType.toLowerCase();
-
-    if (bodyTypeLC == 'json') return 'application/json';
-    if (bodyTypeLC == 'jpeg') return 'image/jpeg';
-    if (bodyTypeLC == 'png') return 'image/png';
-    if (bodyTypeLC == 'text') return 'text/plain';
-    if (bodyTypeLC == 'html') return 'text/html';
-
-    return bodyType;
+    return MimeType.parseAsString(bodyType, bodyType) ;
   }
 }
 
@@ -760,8 +767,8 @@ class DynCallHttpExecutorFactory {
       Map<String, ParameterProvider> parametersProviders,
       Credential authorization,
       List<String> authorizationFields,
-      String body,
-      String bodyPattern,
+      dynamic body,
+      dynamic bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -796,7 +803,7 @@ class DynCallHttpExecutorFactory {
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
-        bodyPattern: bodyPattern,
+        bodyBuilder: bodyBuilder,
         bodyType: bodyType,
         errorResponse: errorResponse,
         errorMaxRetries: errorMaxRetries,
@@ -815,8 +822,8 @@ class DynCallHttpExecutorFactory {
       Map<String, ParameterProvider> parametersProviders,
       Credential authorization,
       List<String> authorizationFields,
-      String body,
-      String bodyPattern,
+      dynamic body,
+      dynamic bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -835,7 +842,7 @@ class DynCallHttpExecutorFactory {
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
-        bodyPattern: bodyPattern,
+        bodyBuilder: bodyBuilder,
         bodyType: bodyType,
         errorResponse: errorResponse,
         errorMaxRetries: errorMaxRetries,
@@ -879,8 +886,8 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       Map<String, ParameterProvider> parametersProviders,
       Credential authorization,
       List<String> authorizationFields,
-      String body,
-      String bodyPattern,
+      dynamic body,
+      dynamic bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -896,7 +903,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
-        bodyPattern: bodyPattern,
+        bodyBuilder: bodyBuilder,
         bodyType: bodyType,
         errorResponse: errorResponse,
         errorMaxRetries: errorMaxRetries,
@@ -916,8 +923,8 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       Map<String, ParameterProvider> parametersProviders,
       Credential authorization,
       List<String> authorizationFields,
-      String body,
-      String bodyPattern,
+      dynamic body,
+      dynamic bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -935,7 +942,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
-        bodyPattern: bodyPattern,
+        bodyBuilder: bodyBuilder,
         bodyType: bodyType,
         errorResponse: errorResponse,
         errorMaxRetries: errorMaxRetries,
