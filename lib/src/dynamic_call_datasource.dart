@@ -1,13 +1,59 @@
 import 'package:dynamic_call/dynamic_call.dart';
+import 'package:json_object_mapper/json_object_mapper.dart';
+import 'package:swiss_knife/swiss_knife.dart';
 
 typedef DataTransformerTo<T> = T Function(dynamic o);
 typedef DataTransformerToList<T> = List<T> Function(dynamic o);
 
+List<T> doTransformToList<T>(dynamic o, DataTransformerTo<T> transformerTo,
+    DataTransformerToList<T> transformerToList) {
+  if (transformerToList != null) {
+    return transformerToList(o);
+  }
+
+  if (o == null) return [];
+
+  if (o is List) {
+    if (o.isEmpty) return [];
+    return o.map((e) => doTransformTo(e, transformerTo)).toList();
+  } else {
+    return [doTransformTo(o, transformerTo)];
+  }
+}
+
+T doTransformTo<T>(dynamic o, DataTransformerTo<T> transformerTo) {
+  if (transformerTo == null) {
+    return o;
+  }
+  return transformerTo(o);
+}
+
 typedef DataTransformerFrom<T> = dynamic Function(T data);
 typedef DataTransformerFromList<T> = dynamic Function(List<T> dataList);
 
+dynamic doTransformFrom<T>(T data, DataTransformerFrom<T> transformerFrom) {
+  if (transformerFrom == null) {
+    return data;
+  }
+  return transformerFrom(data);
+}
+
+dynamic doTransformFromList<T>(
+    List<T> list,
+    DataTransformerFrom<T> transformerFrom,
+    DataTransformerFromList<T> transformerFromList) {
+  if (transformerFromList != null) {
+    return transformerFromList(list);
+  }
+
+  if (list == null || list.isEmpty) return null;
+  return list.map((e) => doTransformFrom(e, transformerFrom)).toList();
+}
+
 /// Base class for [DataSource] and [DataReceiver].
 abstract class DataHandler<T> {
+  static final EventStream<DataHandler> onRegister = EventStream();
+
   static void register(DataHandler instance) {
     if (instance is DataRepository) {
       DataRepository.register(instance);
@@ -21,28 +67,84 @@ abstract class DataHandler<T> {
     }
   }
 
-  static DataHandler<T> byName<T>(String name) {
-    var instance = DataRepository.byName(name) as DataHandler<T>;
+  static DataHandler<T> byName<T>(String domain, String name) {
+    return DataHandler.byID(normalizeID(domain, name));
+  }
+
+  static DataHandler<T> byID<T>(String id) {
+    if (id == null) return null;
+
+    var instance = DataRepository.byID(id) as DataHandler<T>;
     if (instance != null) return instance;
 
-    instance = DataSource.byName(name) as DataHandler<T>;
+    instance = DataSource.byID(id) as DataHandler<T>;
     if (instance != null) return instance;
 
-    instance = DataReceiver.byName(name) as DataHandler<T>;
+    instance = DataReceiver.byID(id) as DataHandler<T>;
     return instance;
   }
 
+  final String id;
+  final String domain;
   final String name;
 
-  DataHandler(this.name, {bool register = true}) {
+  DataHandler(this.domain, this.name,
+      {bool register = true,
+      DataTransformerTo<T> transformerTo,
+      DataTransformerToList<T> transformerToList,
+      DataTransformerFrom<T> transformerFrom,
+      DataTransformerFromList<T> transformerFromList})
+      : id = normalizeID(domain, name),
+        _transformerTo = transformerTo,
+        _transformerToList = transformerToList,
+        _transformerFrom = transformerFrom,
+        _transformerFromList = transformerFromList {
+    _check(this);
+
     register ??= true;
 
-    if (register && hasName) {
+    if (register) {
       DataHandler.register(this);
     }
   }
 
-  bool get hasName => name != null && name.isNotEmpty;
+  static void _check(DataHandler dataHandler) {
+    if (isEmptyObject(dataHandler.domain)) {
+      throw ArgumentError(
+          '${dataHandler.runtimeType}[${dataHandler.domain}:${dataHandler.name}]: null (domain)');
+    }
+    if (isEmptyObject(dataHandler.name)) {
+      throw ArgumentError(
+          '${dataHandler.runtimeType}[${dataHandler.domain}:${dataHandler.name}]: null (name)');
+    }
+
+    if (isEmptyObject(dataHandler.id)) {
+      throw ArgumentError(
+          '${dataHandler.runtimeType}[${dataHandler.domain}:${dataHandler.name}]: null (id)');
+    }
+
+    var idParts = splitID(dataHandler.id);
+
+    if (idParts == null ||
+        idParts.length != 2 ||
+        idParts[0].isEmpty ||
+        idParts[1].isEmpty) {
+      throw ArgumentError(
+          '${dataHandler.runtimeType}[${dataHandler.domain}:${dataHandler.name}]: Invalid id: ${dataHandler.id}');
+    }
+  }
+
+  static String normalizeID(String domain, String name) {
+    if (domain == null || name == null) return null;
+    domain = domain.toLowerCase();
+    name = name.toLowerCase();
+    return '$domain:$name';
+  }
+
+  static List<String> splitID(String id) {
+    var parts = split(id, ':', 2);
+    return parts.length == 2 ? parts : null;
+  }
 
   DataTransformerTo<T> _transformerTo;
 
@@ -50,13 +152,6 @@ abstract class DataHandler<T> {
 
   set transformerTo(DataTransformerTo<T> value) {
     _transformerTo = value;
-  }
-
-  T transformTo(dynamic o) {
-    if (_transformerTo == null) {
-      return o;
-    }
-    return _transformerTo(o);
   }
 
   DataTransformerToList<T> _transformerToList;
@@ -67,21 +162,6 @@ abstract class DataHandler<T> {
     _transformerToList = value;
   }
 
-  List<T> transformToList(dynamic o) {
-    if (_transformerToList != null) {
-      return _transformerToList(o);
-    }
-
-    if (o == null) return [];
-
-    if (o is List) {
-      if (o.isEmpty) return [];
-      return o.map(transformTo).toList();
-    } else {
-      return [transformTo(o)];
-    }
-  }
-
   DataTransformerFrom<T> _transformerFrom;
 
   DataTransformerFrom<T> get transformerFrom => _transformerFrom;
@@ -89,6 +169,11 @@ abstract class DataHandler<T> {
   set transformerFrom(DataTransformerFrom<T> value) {
     _transformerFrom = value;
   }
+
+  T transformTo(dynamic o) => doTransformTo(o, _transformerTo);
+
+  List<T> transformToList(dynamic o) =>
+      doTransformToList(o, _transformerTo, _transformerToList);
 
   DataTransformerFromList<T> _transformerFromList;
 
@@ -98,25 +183,143 @@ abstract class DataHandler<T> {
     _transformerFromList = value;
   }
 
-  dynamic transformFrom(T data) {
-    if (_transformerFrom == null) {
-      return data;
-    }
-    return _transformerFrom(data);
+  dynamic transformFrom(T data) => doTransformFrom(data, _transformerFrom);
+
+  dynamic transformFromList(List<T> list) =>
+      doTransformFromList(list, _transformerFrom, _transformerFromList);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DataHandler &&
+          runtimeType == other.runtimeType &&
+          name == other.name;
+
+  @override
+  int get hashCode => name.hashCode;
+}
+
+/// Enum for type of [DataSource] operation.
+enum DataSourceOperation {
+  get,
+  find,
+  findByID,
+  findByIDRange,
+  put,
+}
+
+/// Returns a [DataSourceOperation] by [name].
+DataSourceOperation getDataSourceOperation(String name) {
+  if (name == null) return null;
+  name = name.trim().toLowerCase();
+
+  switch (name) {
+    case 'get':
+      return DataSourceOperation.get;
+    case 'find':
+      return DataSourceOperation.find;
+    case 'findByID':
+      return DataSourceOperation.findByID;
+    case 'findByIDRange':
+      return DataSourceOperation.findByIDRange;
+    case 'put':
+      return DataSourceOperation.put;
+    default:
+      return null;
+  }
+}
+
+String getDataSourceOperationName(DataSourceOperation operation) {
+  if (operation == null) return null;
+  switch (operation) {
+    case DataSourceOperation.get:
+      return 'get';
+    case DataSourceOperation.find:
+      return 'find';
+    case DataSourceOperation.findByID:
+      return 'findByID';
+    case DataSourceOperation.findByIDRange:
+      return 'findByIDRange';
+    case DataSourceOperation.put:
+      return 'put';
+    default:
+      return null;
+  }
+}
+
+/// Performs a [DataSourceOperation] over [dataSource] instance.
+Future<List<T>> doDataSourceOperation<T>(DataSource<T> dataSource,
+    DataSourceOperation operation, Map<String, String> parameters,
+    [List<T> dataList]) {
+  switch (operation) {
+    case DataSourceOperation.get:
+      return dataSource.get(parameters);
+    case DataSourceOperation.find:
+      return dataSource.find(parameters);
+    case DataSourceOperation.findByID:
+      {
+        var id = findKeyValue(parameters, ['id', 'key'], true);
+        return dataSource.findByID(id);
+      }
+    case DataSourceOperation.findByIDRange:
+      {
+        var fromID = findKeyValue(
+            parameters,
+            ['fromid', 'from_id', 'from-id', 'fromkey', 'from_key', 'from-key'],
+            true);
+        var toID = findKeyValue(parameters,
+            ['toid', 'to_id', 'to-id', 'tokey', 'to_key', 'to-key'], true);
+        return dataSource.findByIDRange(fromID, toID);
+      }
+    case DataSourceOperation.put:
+      {
+        var dataReceiver = dataSource as DataReceiver;
+        return dataReceiver.put(parameters: parameters, dataList: dataList);
+      }
+    default:
+      return Future.value(null);
+  }
+}
+
+/// Wrapper to resolve a [DataSource].
+class DataSourceResolver<T> {
+  final String id;
+  DataSource<T> _dataSource;
+
+  DataSourceResolver(DataSource<T> dataSource)
+      : id = dataSource.id,
+        _dataSource = dataSource;
+
+  DataSourceResolver.byName(String domain, String name)
+      : this.byID(DataHandler.normalizeID(domain, name));
+
+  DataSourceResolver.byID(this.id);
+
+  String get domain => DataHandler.splitID(id)[0];
+
+  String get name => DataHandler.splitID(id)[1];
+
+  DataSource<T> resolveDataSource() {
+    _dataSource ??= DataSource.byID(id);
+    return _dataSource;
   }
 
-  dynamic transformFromList(List<T> list) {
-    if (_transformerFromList != null) {
-      return _transformerFromList(list);
-    }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DataSourceResolver &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          resolveDataSource() == other.resolveDataSource();
 
-    if (list == null || list.isEmpty) return null;
-    return list.map(transformFrom).toList();
-  }
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Represents a Data source
 abstract class DataSource<T> extends DataHandler<T> {
+  static final EventStream<DataSource> onRegister = EventStream();
+
   static final Map<String, DataSource> instances = {};
 
   static void register(DataSource instance) {
@@ -124,24 +327,48 @@ abstract class DataSource<T> extends DataHandler<T> {
     if (instance is DataRepository) {
       DataRepository.register(instance);
     } else {
-      var name = instance.name;
-      var prev = instances[name];
+      var id = instance.id;
+      var prev = instances[id];
       if (identical(prev, instance)) return;
-      instances[name] = instance;
+
+      if (prev != instance) {
+        instances[id] = instance;
+        onRegister.add(instance);
+        DataHandler.onRegister.add(instance);
+      }
     }
   }
 
-  static DataSource<T> byName<T>(String name) {
-    if (name == null) return null;
-    var instance = instances[name];
-    instance ??= DataRepository.byName(name);
+  static DataSource<T> byName<T>(String domain, String name) {
+    return byID(DataHandler.normalizeID(domain, name));
+  }
+
+  static DataSource<T> byID<T>(String id) {
+    if (id == null) return null;
+    var instance = instances[id];
+    instance ??= DataRepository.byID(id);
     return instance;
   }
 
-  DataSource(String name, {bool register = true})
-      : super(name, register: register);
+  DataSource(String domain, String name,
+      {bool register = true,
+      DataTransformerTo<T> transformerTo,
+      DataTransformerToList<T> transformerToList,
+      DataTransformerFrom<T> transformerFrom,
+      DataTransformerFromList<T> transformerFromList})
+      : super(domain, name,
+            register: register,
+            transformerTo: transformerTo,
+            transformerToList: transformerToList,
+            transformerFrom: transformerFrom,
+            transformerFromList: transformerFromList);
 
-  Future getImpl(Map<String, dynamic> parameters);
+  bool get isRegistered => DataSource.byID(id) == this;
+
+  Future<List<T>> doOperation(
+          DataSourceOperation operation, Map<String, String> parameters,
+          [List<T> dataList]) =>
+      doDataSourceOperation(this, operation, parameters, dataList);
 
   /// Gets data using [parameters] as selector.
   Future<List<T>> get([Map<String, dynamic> parameters]) async {
@@ -159,7 +386,7 @@ abstract class DataSource<T> extends DataHandler<T> {
 
   /// Finds data by ID.
   Future<List<T>> findByID(dynamic id) async {
-    return get(parametersFindByID(id));
+    return findByIDImpl(parametersFindByID(id));
   }
 
   /// Finds data by ID range.
@@ -171,10 +398,21 @@ abstract class DataSource<T> extends DataHandler<T> {
   Future<List<T>> find(Map<String, dynamic> filter) async {
     return get(parametersFind(filter));
   }
+
+  Future getImpl(Map<String, dynamic> parameters);
+
+  Future findByIDImpl(Map<String, dynamic> parameters) => getImpl(parameters);
+
+  Future findByIDRangeImpl(Map<String, dynamic> parameters) =>
+      findByIDImpl(parameters);
+
+  Future findImpl(Map<String, dynamic> parameters) => getImpl(parameters);
 }
 
 /// Represents a data receiver, that can store or process data.
 abstract class DataReceiver<T> extends DataHandler<T> {
+  static final EventStream<DataReceiver> onRegister = EventStream();
+
   static final Map<String, DataReceiver> instances = {};
 
   static void register(DataReceiver instance) {
@@ -185,19 +423,28 @@ abstract class DataReceiver<T> extends DataHandler<T> {
       var name = instance.name;
       var prev = instances[name];
       if (identical(prev, instance)) return;
-      instances[name] = instance;
+
+      if (prev != instance) {
+        instances[name] = instance;
+        onRegister.add(instance);
+        DataHandler.onRegister.add(instance);
+      }
     }
   }
 
-  static DataReceiver<T> byName<T>(String name) {
-    if (name == null) return null;
-    var instance = instances[name];
-    instance ??= DataRepository.byName(name);
+  static DataReceiver<T> byName<T>(String domain, String name) {
+    return DataReceiver.byID(DataHandler.normalizeID(domain, name));
+  }
+
+  static DataReceiver<T> byID<T>(String id) {
+    if (id == null) return null;
+    var instance = instances[id];
+    instance ??= DataRepository.byID(id);
     return instance;
   }
 
-  DataReceiver(String name, {bool register = true})
-      : super(name, register: register);
+  DataReceiver(String domain, String name, {bool register = true})
+      : super(domain, name, register: register);
 
   Future putImpl(Map<String, dynamic> parameters, dynamic payload);
 
@@ -212,34 +459,53 @@ abstract class DataReceiver<T> extends DataHandler<T> {
 
 /// Represents simultaneously a [DataSource] and a [DataReceiver].
 abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
+  static final EventStream<DataRepository> onRegister = EventStream();
+
   static final Map<String, DataRepository> instances = {};
 
   static void register(DataRepository instance) {
     if (instance == null) return;
-    var name = instance.name;
-    var prev = instances[name];
+    var id = instance.id;
+    var prev = instances[id];
     if (identical(prev, instance)) return;
-    instances[name] = instance;
+
+    if (prev != instance) {
+      instances[id] = instance;
+      onRegister.add(instance);
+      DataHandler.onRegister.add(instance);
+    }
   }
 
-  static DataRepository<T> byName<T>(String name) {
-    if (name == null) return null;
-    return instances[name];
+  static DataRepository<T> byName<T>(String domain, String name) {
+    return byID(DataHandler.normalizeID(domain, name));
   }
+
+  static DataRepository<T> byID<T>(String id) {
+    if (id == null) return null;
+    return instances[id];
+  }
+
+  @override
+  final String domain;
 
   @override
   final String name;
 
-  DataRepository(this.name, {bool register = true}) {
+  @override
+  String get id => DataHandler.normalizeID(domain, name);
+
+  DataRepository(this.domain, this.name, {bool register = true}) {
+    DataHandler._check(this);
+
     register ??= true;
 
-    if (register && hasName) {
+    if (register) {
       DataHandler.register(this);
     }
   }
 
   @override
-  bool get hasName => name != null && name.isNotEmpty;
+  bool get isRegistered => DataRepository.byName(domain, name) == this;
 
   @override
   DataTransformerTo<T> _transformerTo;
@@ -284,6 +550,12 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   set transformerFromList(DataTransformerFromList<T> value) {
     _transformerFromList = value;
   }
+
+  @override
+  Future<List<T>> doOperation(
+          DataSourceOperation operation, Map<String, String> parameters,
+          [List<T> dataList]) =>
+      doDataSourceOperation(this, operation, parameters, dataList);
 
   @override
   Future<List<T>> get([Map<String, dynamic> parameters]) async {
@@ -313,6 +585,16 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   Future<List<T>> find(Map<String, dynamic> filter) async {
     return get(DataSource.parametersFind(filter));
   }
+
+  @override
+  Future findByIDImpl(Map<String, dynamic> parameters) => getImpl(parameters);
+
+  @override
+  Future findByIDRangeImpl(Map<String, dynamic> parameters) =>
+      findByIDImpl(parameters);
+
+  @override
+  Future findImpl(Map<String, dynamic> parameters) => getImpl(parameters);
 
   @override
   dynamic transformFrom(T data) {
@@ -364,9 +646,9 @@ class DataRepositoryWrapper<T> extends DataRepository<T> {
 
   final DataReceiver<T> receiver;
 
-  DataRepositoryWrapper(String name, this.source, this.receiver,
+  DataRepositoryWrapper(String domain, String name, this.source, this.receiver,
       {bool register = true})
-      : super(name, register: register);
+      : super(domain, name, register: register);
 
   @override
   Future<List<T>> get([Map<String, dynamic> parameters]) {
@@ -437,7 +719,8 @@ class DataRepositoryWrapper<T> extends DataRepository<T> {
 class DataSourceDynCall<T> extends DataSource<T> {
   final DynCall<dynamic, List<T>> call;
 
-  DataSourceDynCall(String name, this.call) : super(name);
+  DataSourceDynCall(String domain, String name, this.call)
+      : super(domain, name);
 
   @override
   Future getImpl(Map<String, dynamic> parameters) async {
@@ -452,7 +735,8 @@ class DataSourceDynCall<T> extends DataSource<T> {
 class DataReceiverDynCall<T> extends DataReceiver<T> {
   final DynCall<dynamic, List<T>> call;
 
-  DataReceiverDynCall(String name, this.call) : super(name);
+  DataReceiverDynCall(String domain, String name, this.call)
+      : super(domain, name);
 
   @override
   Future<List> putImpl(Map<String, dynamic> parameters, dynamic payload) async {
@@ -469,7 +753,8 @@ class DataSourceExecutor<E, T> extends DataSource<T> {
 
   DynCallExecutor get executor => _call.executor;
 
-  DataSourceExecutor(String name, DynCallExecutor<E> executor) : super(name) {
+  DataSourceExecutor(String domain, String name, DynCallExecutor<E> executor)
+      : super(domain, name) {
     _call = DynCall<E, List<T>>([], DynCallType.JSON,
         allowRetries: true,
         outputFilter: (o) => transformToList(o is List ? o : [o]));
@@ -490,7 +775,8 @@ class DataReceiverExecutor<E, T> extends DataReceiver<T> {
 
   DynCallExecutor get executor => _call.executor;
 
-  DataReceiverExecutor(String name, DynCallExecutor<E> executor) : super(name) {
+  DataReceiverExecutor(String domain, String name, DynCallExecutor<E> executor)
+      : super(domain, name) {
     _call = DynCall<E, List<T>>([], DynCallType.JSON,
         allowRetries: true,
         outputFilter: (o) => transformToList(o is List ? o : [o]));
@@ -507,15 +793,45 @@ class DataReceiverExecutor<E, T> extends DataReceiver<T> {
 
 /// Represents a [HttpCall] to request data.
 class DataCallHttp extends HttpCall {
+  static Map<String, String> toParametersPattern(dynamic parametersPattern) {
+    if (parametersPattern == null) return null;
+    if (parametersPattern is String) {
+      return decodeQueryString(parametersPattern);
+    } else if (parametersPattern is Map) {
+      return HttpCall.toQueryParameters(parametersPattern);
+    } else if (parametersPattern is List) {
+      parametersPattern.removeWhere((e) => isEmptyObject(e));
+      if (parametersPattern.isEmpty) return null;
+
+      var parameters = toParametersPattern(parametersPattern.first);
+      var extraParameters = parametersPattern.sublist(1);
+
+      for (var params in extraParameters) {
+        var map = toParametersPattern(params);
+        if (map != null) {
+          parameters.addAll(map);
+        }
+      }
+
+      return parameters;
+    } else {
+      return null;
+    }
+  }
+
+  final Map<String, String> parametersPattern;
+
   DataCallHttp(
       {String baseURL,
       HttpClient client,
       HttpMethod method,
       String path,
       bool fullPath,
+      dynamic parametersPattern,
       dynamic body,
       int maxRetries})
-      : super(
+      : parametersPattern = toParametersPattern(parametersPattern),
+        super(
             baseURL: baseURL,
             client: client,
             method: method,
@@ -548,71 +864,408 @@ class DataCallHttp extends HttpCall {
     return path;
   }
 
+  String _resolvePattern(String s, Map<String, String> parameters) {
+    if (s == null) return '';
+    if (s.contains('{{')) {
+      return buildStringPattern(s, parameters);
+    } else {
+      return s;
+    }
+  }
+
   @override
   Future<HttpResponse> requestHttpClient(HttpClient client, HttpMethod method,
-      String path, bool fullPath, Map<String, dynamic> parameters, body) {
-    Map<String, String> queryParameters;
+      String path, bool fullPath, Map parameters, body) {
+    if (parametersPattern != null && parametersPattern.isNotEmpty) {
+      parameters ??= {};
+      var queryParameters = HttpCall.toQueryParameters(parameters);
+      for (var entry in parametersPattern.entries) {
+        var k = _resolvePattern(entry.key, queryParameters);
+        var v = _resolvePattern(entry.value, queryParameters);
+        parameters[k] = v;
+      }
+    }
 
     if (parameters != null) {
       var findByID = parameters.remove('--id');
       if (findByID != null) {
         path = _appendPath(path, findByID);
-        queryParameters = toQueryParameters(parameters);
+        parameters = HttpCall.toQueryParameters(parameters);
       } else {
         var findFromID = parameters.remove('--fromID');
         var findToID = parameters.remove('--toID');
 
         if (findFromID != null && findToID != null) {
           path = _appendPath(path, '$findFromID..$findToID');
-          queryParameters = toQueryParameters(parameters);
+          parameters = HttpCall.toQueryParameters(parameters);
         } else {
           var filter = parameters.remove('--filter');
           if (filter != null && filter is Map) {
-            queryParameters = toQueryParameters(filter);
+            parameters = HttpCall.toQueryParameters(filter);
           } else {
-            queryParameters = toQueryParameters(parameters);
+            parameters = HttpCall.toQueryParameters(parameters);
           }
         }
       }
     }
 
-    return super.requestHttpClient(
-        client, method, path, fullPath, queryParameters, body);
+    return super
+        .requestHttpClient(client, method, path, fullPath, parameters, body);
   }
+}
+
+class DataSourceOperationHttp<T> {
+  final DataSourceOperation operation;
+
+  String baseURL;
+
+  HttpClient client;
+  HttpMethod method;
+  String path;
+  bool fullPath;
+  dynamic parameters;
+  dynamic body;
+
+  DataTransformerTo<T> transformResponse;
+  JSONTransformer jsonTransformer;
+
+  DataCallHttp _httpConfig;
+
+  DataSourceOperationHttp(this.operation,
+      {this.baseURL,
+      this.client,
+      this.method,
+      this.path,
+      this.fullPath,
+      this.parameters,
+      this.body,
+      this.transformResponse,
+      dynamic jsonTransformer})
+      : jsonTransformer = JSONTransformer.from(jsonTransformer);
+
+  Map toJsonMap() {
+    return removeNullEntries({
+      'operation': getDataSourceOperationName(operation),
+      'baseURL': baseURL,
+      'method': getHttpMethodName(method),
+      'path': path,
+      'fullPath': fullPath,
+      'parameters': parameters,
+      'body': body,
+    });
+  }
+
+  String toJson([bool withIndent]) {
+    return encodeJSON(toJsonMap(), withIndent: withIndent);
+  }
+
+  factory DataSourceOperationHttp.from(dynamic config) {
+    if (config == null) return null;
+
+    if (config is String) {
+      config = parseJSON(config);
+    }
+
+    if (config is Map) {
+      var operation = getDataSourceOperation(
+          parseString(findKeyValue(config, ['operation', 'op'], true)));
+      var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
+      var method =
+          getHttpMethod(parseString(findKeyValue(config, ['method'], true)));
+      var path = parseString(findKeyValue(config, ['path'], true));
+      var fullPath = parseBool(findKeyValue(config, ['fullPath'], true));
+      var parameters =
+          findKeyValue(config, ['parameters', 'args', 'properties'], true);
+      var body = findKeyValue(config, ['body', 'content', 'payload'], true);
+
+      var jsonTransformer = findKeyValue(
+          config,
+          ['jsonTransformer', 'transformResponse', 'transform', 'transformer'],
+          true);
+
+      return DataSourceOperationHttp(operation,
+          baseURL: baseURL,
+          method: method,
+          path: path,
+          fullPath: fullPath,
+          parameters: parameters,
+          body: body,
+          jsonTransformer: jsonTransformer);
+    }
+
+    return null;
+  }
+
+  DataCallHttp get httpConfig {
+    _httpConfig ??= DataCallHttp(
+        baseURL: baseURL,
+        client: client,
+        method: method,
+        path: path,
+        fullPath: fullPath,
+        parametersPattern: parameters,
+        body: body,
+        maxRetries: 3);
+    return _httpConfig;
+  }
+
+  Future<T> call(Map<String, dynamic> parameters) async {
+    dynamic response = await httpConfig.callAndResolve(parameters);
+
+    if (transformResponse != null) {
+      response = transformResponse(response);
+    }
+
+    if (jsonTransformer != null) {
+      response = jsonTransformer.transform(response);
+    }
+
+    return response;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DataSourceOperationHttp &&
+          runtimeType == other.runtimeType &&
+          operation == other.operation &&
+          baseURL == other.baseURL &&
+          method == other.method &&
+          path == other.path &&
+          fullPath == other.fullPath &&
+          isEqualsDeep(parameters, other.parameters) &&
+          isEqualsDeep(body, other.body);
+
+  @override
+  int get hashCode =>
+      operation.hashCode ^
+      baseURL.hashCode ^
+      method.hashCode ^
+      path.hashCode ^
+      fullPath.hashCode ^
+      deepHashCode(parameters) ^
+      deepHashCode(body);
 }
 
 /// A [DataSource] based in a [DataCallHttp] for requests.
 class DataSourceHttp<T> extends DataSource<T> {
-  final DataCallHttp httpConfig;
+  final String baseURL;
+  final dynamic parameters;
 
-  DataSourceHttp(String name,
-      {String baseURL,
-      HttpClient client,
-      HttpMethod method,
-      String path,
-      bool fullPath,
-      dynamic body})
-      : httpConfig = DataCallHttp(
-            baseURL: baseURL,
-            client: client,
-            method: method,
-            path: path,
-            fullPath: fullPath,
-            body: body,
-            maxRetries: 3),
-        super(name);
+  final DataSourceOperationHttp opGet;
+  final DataSourceOperationHttp opFind;
+  final DataSourceOperationHttp opFindByID;
+  final DataSourceOperationHttp opFindByIDRange;
+
+  DataSourceHttp(String domain, String name,
+      {this.baseURL,
+      this.parameters,
+      this.opGet,
+      this.opFind,
+      this.opFindByID,
+      this.opFindByIDRange,
+      DataTransformerTo<T> transformerTo,
+      DataTransformerToList<T> transformerToList,
+      DataTransformerFrom<T> transformerFrom,
+      DataTransformerFromList<T> transformerFromList})
+      : super(domain, name,
+            transformerTo: transformerTo,
+            transformerToList: transformerToList,
+            transformerFrom: transformerFrom,
+            transformerFromList: transformerFromList) {
+    _check();
+  }
+
+  Map toJsonMap() {
+    return removeNullEntries({
+      'domain': domain,
+      'name': name,
+      'baseURL': baseURL,
+      'parameters': HttpCall.toQueryParameters(parameters),
+      'opGet': _opToJsonMap(opGet),
+      'opFind': _opToJsonMap(opFind),
+      'opFindByID': _opToJsonMap(opFindByID),
+      'opFindByIDRange': _opToJsonMap(opFindByIDRange),
+    });
+  }
+
+  dynamic _opToJsonMap(DataSourceOperationHttp op) {
+    if (op == null) return null;
+    var map = deepCopy(op.toJsonMap());
+
+    if (map['baseURL'] == baseURL) {
+      map.remove('baseURL');
+    }
+
+    var opParameters = map['parameters'];
+
+    if (opParameters is Map && parameters != null) {
+      var params = DataCallHttp.toParametersPattern(parameters);
+
+      for (var entry in params.entries) {
+        var key = entry.key;
+        if (opParameters[key] == entry.value) {
+          opParameters.remove(key);
+        }
+      }
+    }
+
+    return map;
+  }
+
+  String toJson([bool withIndent]) {
+    return encodeJSON(toJsonMap(), withIndent: withIndent);
+  }
+
+  factory DataSourceHttp.from(dynamic config) {
+    if (config == null) return null;
+
+    if (config is DataSourceHttp) return config;
+
+    if (config is String) {
+      config = parseJSON(config);
+    }
+
+    if (config is Map) {
+      var id = parseString(findKeyValue(config, ['id'], true));
+
+      String domain;
+      String name;
+
+      if (id != null) {
+        var parts = DataHandler.splitID(id);
+        if (parts != null) {
+          domain = parts[0];
+          name = parts[1];
+        }
+      }
+
+      domain = parseString(findKeyValue(config, ['domain'], true), domain);
+      name = parseString(findKeyValue(config, ['name'], true), name);
+
+      var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
+      var parameters =
+          findKeyValue(config, ['parameters', 'args', 'properties'], true);
+
+      var opGet = DataSourceOperationHttp.from(
+          findKeyValue(config, ['opGet', 'get'], true));
+      var opFind = DataSourceOperationHttp.from(
+          findKeyValue(config, ['opFind', 'find'], true));
+      var opFindByID = DataSourceOperationHttp.from(
+          findKeyValue(config, ['opFindByID', 'findByID'], true));
+      var opFindByIDRange = DataSourceOperationHttp.from(
+          findKeyValue(config, ['opFindByIDRange', 'findByIDRange'], true));
+
+      return DataSourceHttp(domain, name,
+          baseURL: baseURL,
+          parameters: parameters,
+          opGet: opGet,
+          opFind: opFind,
+          opFindByID: opFindByID,
+          opFindByIDRange: opFindByIDRange);
+    }
+
+    return null;
+  }
+
+  void _check() {
+    if (opGet == null &&
+        opFind == null &&
+        opFindByID == null &&
+        opFindByIDRange == null) {
+      throw ArgumentError('All operations are null!');
+    }
+
+    if (isNotEmptyObject(baseURL)) {
+      _opSetBaseURL(opGet);
+      _opSetBaseURL(opFind);
+      _opSetBaseURL(opFindByID);
+      _opSetBaseURL(opFindByIDRange);
+    }
+
+    if (parameters != null) {
+      _opSetParametersPattern(opGet);
+      _opSetParametersPattern(opFind);
+      _opSetParametersPattern(opFindByID);
+      _opSetParametersPattern(opFindByIDRange);
+    }
+  }
+
+  void _opSetBaseURL(DataSourceOperationHttp op) {
+    if (op != null) {
+      op.baseURL ??= baseURL;
+    }
+  }
+
+  void _opSetParametersPattern(DataSourceOperationHttp op) {
+    if (op != null) {
+      op.parameters =
+          DataCallHttp.toParametersPattern([parameters, op.parameters]);
+    }
+  }
+
+  void _checkOp(DataSourceOperationHttp operationHttp, String op) {
+    if (operationHttp == null) {
+      throw UnsupportedError('Unsupported DataSourceHttp operation: $op');
+    }
+  }
 
   @override
   Future getImpl(Map<String, dynamic> parameters) {
-    return httpConfig.callAndResolve(parameters);
+    _checkOp(opGet, 'get');
+    return opGet.call(parameters);
   }
+
+  @override
+  Future findImpl(Map<String, dynamic> parameters) {
+    var op = (opFind ?? opGet);
+    _checkOp(op, 'find');
+    return op.call(parameters);
+  }
+
+  @override
+  Future findByIDImpl(Map<String, dynamic> parameters) {
+    var op = (opFindByID ?? opGet);
+    _checkOp(op, 'findByID');
+    return op.call(parameters);
+  }
+
+  @override
+  Future findByIDRangeImpl(Map<String, dynamic> parameters) {
+    var op = (opFindByIDRange ?? opFindByID ?? opGet);
+    _checkOp(op, 'findByIDRange');
+    return op.call(parameters);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      super == other &&
+          other is DataSourceHttp &&
+          runtimeType == other.runtimeType &&
+          baseURL == other.baseURL &&
+          isEqualsDeep(parameters, other.parameters) &&
+          opGet == other.opGet &&
+          opFind == other.opFind &&
+          opFindByID == other.opFindByID &&
+          opFindByIDRange == other.opFindByIDRange;
+
+  @override
+  int get hashCode =>
+      super.hashCode ^
+      baseURL.hashCode ^
+      deepHashCode(parameters) ^
+      opGet.hashCode ^
+      opFind.hashCode ^
+      opFindByID.hashCode ^
+      opFindByIDRange.hashCode;
 }
 
 /// A [DataReceiver] based in a [DataCallHttp] for requests.
 class DataReceiverHttp<T> extends DataReceiver<T> {
   final DataCallHttp httpConfig;
 
-  DataReceiverHttp(String name,
+  DataReceiverHttp(String domain, String name,
       {String baseURL,
       HttpClient client,
       HttpMethod method,
@@ -627,7 +1280,7 @@ class DataReceiverHttp<T> extends DataReceiver<T> {
             fullPath: fullPath,
             body: body,
             maxRetries: 0),
-        super(name);
+        super(domain, name);
 
   @override
   Future putImpl(Map<String, dynamic> parameters, dynamic payload) {
@@ -641,7 +1294,7 @@ class DataRepositoryHttp<T> extends DataRepository<T> {
 
   final DataCallHttp httpConfigReceiver;
 
-  DataRepositoryHttp(String name,
+  DataRepositoryHttp(String domain, String name,
       {String baseURL,
       HttpClient client,
       HttpMethod sourceMethod,
@@ -668,13 +1321,13 @@ class DataRepositoryHttp<T> extends DataRepository<T> {
             fullPath: receiverFullPath,
             body: receiverBody,
             maxRetries: 0),
-        super(name);
+        super(domain, name);
 
-  DataRepositoryHttp.fromConfig(
-      String name, HttpCall httpConfigSource, HttpCall httpConfigReceiver)
+  DataRepositoryHttp.fromConfig(String domain, String name,
+      HttpCall httpConfigSource, HttpCall httpConfigReceiver)
       : httpConfigSource = DataCallHttp.from(httpConfigSource),
         httpConfigReceiver = DataCallHttp.from(httpConfigReceiver),
-        super(name);
+        super(domain, name);
 
   @override
   Future getImpl(Map<String, dynamic> parameters) {
@@ -684,5 +1337,195 @@ class DataRepositoryHttp<T> extends DataRepository<T> {
   @override
   Future putImpl(Map<String, dynamic> parameters, dynamic payload) {
     return httpConfigReceiver.callAndResolve(parameters, body: payload);
+  }
+}
+
+class DataSourceCall<T> {
+  static final Map<DataSourceCall, DataSourceCall> _instances = {};
+
+  static DataSourceCall<T> singleton<T>(DataSourceCall<T> instance) {
+    if (instance == null) return null;
+
+    var prev = _instances[instance];
+    if (prev != null) return prev;
+
+    _instances[instance] = instance;
+    return instance;
+  }
+
+  final DataSourceResolver dataSourceResolver;
+  final DataSourceOperation operation;
+  final Map<String, String> parameters;
+
+  factory DataSourceCall(
+      DataSource<T> dataSource, DataSourceOperation operation, Map parameters) {
+    var instance = DataSourceCall._(dataSource, operation, parameters);
+    return singleton(instance);
+  }
+
+  DataSourceCall._(DataSource<T> dataSource, this.operation, Map parameters)
+      : dataSourceResolver = DataSourceResolver(dataSource),
+        parameters = HttpCall.toQueryParameters(parameters);
+
+  factory DataSourceCall.byDataSourceName(String dataSourceDomain,
+      String dataSourceName, DataSourceOperation operation, Map parameters) {
+    var instance = DataSourceCall._byDataSourceID(
+        DataHandler.normalizeID(dataSourceDomain, dataSourceName),
+        operation,
+        parameters);
+    return singleton(instance);
+  }
+
+  factory DataSourceCall.byDataSourceID(
+      String dataSourceID, DataSourceOperation operation, Map parameters) {
+    var instance =
+        DataSourceCall._byDataSourceID(dataSourceID, operation, parameters);
+    return singleton(instance);
+  }
+
+  DataSourceCall._byDataSourceID(
+      String dataSourceID, this.operation, Map parameters)
+      : dataSourceResolver = DataSourceResolver.byID(dataSourceID),
+        parameters = HttpCall.toQueryParameters(parameters);
+
+  factory DataSourceCall.from(dynamic call) {
+    if (call is DataSourceCall) return call;
+    if (call is String) return DataSourceCall.parse(call);
+    return null;
+  }
+
+  static final RegExp CALL_PATTERN =
+      RegExp(r'\s*([\w-]+(?:\.[\w-]+)*:\w+)(?:(?:\.(\w+))?\((.*?)\))?\s*');
+  static final RegExp PARAMETERS_DELIMITER_PATTERN = RegExp(r'\s*,\s*');
+
+  factory DataSourceCall.parse(String call) {
+    if (call == null) return null;
+
+    var match = CALL_PATTERN.firstMatch(call);
+
+    if (match == null) return null;
+
+    var id = match.group(1);
+
+    var operationName = match.group(2) ?? 'get';
+
+    var operation = getDataSourceOperation(operationName);
+    if (operation == null) return null;
+
+    var parametersStr = (match.group(3) ?? '').trim();
+
+    var parameters = decodeQueryString(parametersStr) ?? {};
+
+    var dataSourceCall =
+        DataSourceCall.byDataSourceID(id, operation, parameters);
+    return dataSourceCall;
+  }
+
+  DataSource<T> get dataSource => dataSourceResolver.resolveDataSource();
+
+  String get name => dataSourceResolver.name;
+
+  String get operationName => getDataSourceOperationName(operation);
+
+  static final Duration defaultCacheTimeout = Duration(seconds: 10);
+
+  Duration _cacheTimeout = defaultCacheTimeout;
+
+  Duration get cacheTimeout => _cacheTimeout;
+
+  set cacheTimeout(Duration value) {
+    _cacheTimeout = value ?? defaultCacheTimeout;
+
+    if (_cacheTimeout.inMilliseconds < 100) {
+      _cacheTimeout = Duration(milliseconds: 100);
+    }
+  }
+
+  DataSourceResponse _lastResponse;
+
+  Future<List<T>> call([List<T> dataList]) async {
+    if (_lastResponse != null &&
+        !_lastResponse.isExpired(_cacheTimeout.inMilliseconds)) {
+      var same = _lastResponse.isSameCall(operation, parameters, dataList);
+      if (same) {
+        return deepCopy<List<T>>(_lastResponse.result);
+      }
+    }
+
+    var result = await dataSource.doOperation(operation, parameters, dataList);
+    _lastResponse = DataSourceResponse(operation, parameters, dataList, result);
+    return result;
+  }
+
+  List<T> cachedCall([List<T> dataList]) {
+    if (_lastResponse != null &&
+        !_lastResponse.isExpired(_cacheTimeout.inMilliseconds)) {
+      var same = _lastResponse.isSameCall(operation, parameters, dataList);
+      if (same) {
+        return deepCopy<List<T>>(_lastResponse.result);
+      }
+    }
+    return null;
+  }
+
+  @override
+  String toString() {
+    var parametersStr = encodeQueryString(parameters);
+    return '$name.$operationName($parametersStr)';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DataSourceCall &&
+          runtimeType == other.runtimeType &&
+          dataSourceResolver == other.dataSourceResolver &&
+          operation == other.operation &&
+          isEqualsDeep(parameters, other.parameters);
+
+  @override
+  int get hashCode =>
+      dataSourceResolver.hashCode ^
+      operation.hashCode ^
+      deepHashCode(parameters);
+}
+
+class DataSourceResponse<T> {
+  final DataSourceOperation operation;
+  final Map<String, String> parameters;
+  final List<T> dataList;
+  final List<T> result;
+  final int time;
+
+  DataSourceResponse(
+      this.operation, this.parameters, this.dataList, this.result)
+      : time = DateTime.now().millisecondsSinceEpoch;
+
+  int get elapsedTime => DateTime.now().millisecondsSinceEpoch - time;
+
+  bool isExpired(int timeout) => elapsedTime > timeout;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DataSourceResponse &&
+          runtimeType == other.runtimeType &&
+          operation == other.operation &&
+          isEqualsDeep(parameters, other.parameters) &&
+          isEqualsDeep(dataList, other.dataList) &&
+          isEqualsDeep(result, other.result);
+
+  @override
+  int get hashCode =>
+      operation.hashCode ^
+      deepHashCode(parameters) ^
+      deepHashCode(dataList) ^
+      deepHashCode(result);
+
+  bool isSameCall(DataSourceOperation operation, Map<String, String> parameters,
+      List dataList) {
+    return operation == this.operation &&
+        isEqualsDeep(parameters, this.parameters) &&
+        isEqualsDeep(dataList, this.dataList);
   }
 }

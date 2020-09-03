@@ -1,3 +1,11 @@
+## 1.0.12
+
+- 1st working version of `DataSource` framework.
+- Added `JSONTransformer` support to `DataSource`.
+- mercury_client: ^1.1.10
+- swiss_knife: ^2.5.12
+- json_object_mapper: ^1.1.2
+
 ## 1.0.11
 
 - Added: `DynCallFunctionExecutor`.

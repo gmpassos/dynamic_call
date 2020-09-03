@@ -416,7 +416,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     var response = httpClient.request(method, path,
         fullPath: fullPath,
         authorization: authorization,
-        queryParameters: requestParameters,
+        parameters: requestParameters,
         body: body,
         contentType: bodyType);
 
@@ -491,7 +491,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     var response = httpClient.request(method, path,
         fullPath: fullPath,
         authorization: authorization,
-        queryParameters: requestParameters,
+        parameters: requestParameters,
         body: body,
         contentType: bodyType);
 

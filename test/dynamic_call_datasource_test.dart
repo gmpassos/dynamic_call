@@ -1,10 +1,16 @@
-import 'dart:io' as io;
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' as io;
 
+import 'package:dynamic_call/dynamic_call.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 import 'package:test/test.dart';
-import 'package:dynamic_call/dynamic_call.dart';
+
+/*
+--------------------------------------------------------------------------------
+| HTTP SERVER:
+--------------------------------------------------------------------------------
+ */
 
 class TestServer {
   io.HttpServer server;
@@ -33,8 +39,9 @@ class TestServer {
     _serverOpen.complete(true);
 
     await for (io.HttpRequest request in server) {
-      var path = request.uri.path;
-      var query = request.uri.queryParameters;
+      var uri = request.uri;
+      var path = uri.path;
+      var query = uri.queryParameters;
       var contentType = request.headers.contentType;
       var body = await _decodeBody(contentType, request);
 
@@ -114,6 +121,12 @@ class TestServer {
   }
 }
 
+/*
+--------------------------------------------------------------------------------
+| TESTS:
+--------------------------------------------------------------------------------
+ */
+
 void main() {
   group('DataRepository', () {
     TestServer testServer;
@@ -138,10 +151,11 @@ void main() {
 
       callPut.executor = DynCallStaticExecutor<String>('10,11,12');
 
-      DataSource<int> source = DataSourceDynCall('', callGet);
-      DataReceiver<int> receiver = DataReceiverDynCall('', callPut);
+      DataSource<int> source = DataSourceDynCall('foo', 'test', callGet);
+      DataReceiver<int> receiver = DataReceiverDynCall('foo', 'test', callPut);
 
-      var repository = DataRepositoryWrapper('dynCall', source, receiver);
+      var repository =
+          DataRepositoryWrapper('foo', 'dynCall', source, receiver);
 
       var got = await repository.get();
 
@@ -154,11 +168,11 @@ void main() {
 
     test('DataRepositoryWrapper(StaticExecutor)', () async {
       DataSource<int> source = DataSourceExecutor<String, int>(
-          '', DynCallStaticExecutor<String>('1,2,3,4,5,6'))
+          'foo', 'test', DynCallStaticExecutor<String>('1,2,3,4,5,6'))
         ..transformerToList = (o) => parseIntsFromInlineList(o);
 
       DataReceiver<int> receiver = DataReceiverExecutor<String, int>(
-          '', DynCallStaticExecutor<String>('10,11,12'))
+          'foo', 'test', DynCallStaticExecutor<String>('10,11,12'))
         ..transformerToList = (o) {
           return parseIntsFromInlineList(o);
         }
@@ -167,7 +181,7 @@ void main() {
         };
 
       var repository =
-          DataRepositoryWrapper('staticExecutor', source, receiver);
+          DataRepositoryWrapper('foo', 'staticExecutor', source, receiver);
 
       var got = await repository.get();
 
@@ -180,18 +194,20 @@ void main() {
 
     test('DataRepositoryWrapper(FunctionExecutor)', () async {
       DataSource<int> source = DataSourceExecutor<String, int>(
-          '',
+          'foo',
+          'test',
           DynCallFunctionExecutor<String, dynamic>(
               (d, p) async => '1,2,3,4,5,6'))
         ..transformerToList = (o) => parseIntsFromInlineList(o);
 
       DataReceiver<int> receiver = DataReceiverExecutor<List<int>, int>(
-          '',
+          'foo',
+          'test',
           DynCallFunctionExecutor<List<int>, dynamic>(
               (d, p) async => [10, 11, 12]));
 
       var repository =
-          DataRepositoryWrapper('functionExecutor', source, receiver);
+          DataRepositoryWrapper('foo', 'functionExecutor', source, receiver);
 
       var got = await repository.get();
 
@@ -205,16 +221,19 @@ void main() {
     test('DataRepositoryWrapper(Http)', () async {
       testServer.waitOpen();
 
-      var client = HttpClient('http://localhost:${testServer.port}/tests');
+      var baseURL = 'http://localhost:${testServer.port}/tests';
+      var client = HttpClient(baseURL);
 
-      DataSource<int> source = DataSourceHttp('', client: client, path: 'get')
+      DataSource<int> source = DataSourceHttp('foo', 'test',
+          baseURL: baseURL,
+          opGet: DataSourceOperationHttp(DataSourceOperation.get, path: 'get'))
         ..transformerToList = (o) {
           return parseIntsFromInlineList(o);
         }
         ..transformerFromList = (l) {
           return l == null ? '' : l.join(',');
         };
-      DataReceiver<int> receiver = DataReceiverHttp('',
+      DataReceiver<int> receiver = DataReceiverHttp('foo', 'test',
           client: client, method: HttpMethod.POST, path: 'put')
         ..transformerToList = (o) {
           return parseIntsFromInlineList(o);
@@ -223,7 +242,8 @@ void main() {
           return l == null ? '' : l.join(',');
         };
 
-      var repository = DataRepositoryWrapper('api_src_rcv', source, receiver);
+      var repository =
+          DataRepositoryWrapper('foo', 'api_src_rcv', source, receiver);
 
       var findByID = await repository.findByID(123);
       expect(findByID, equals([123]));
@@ -245,6 +265,7 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests');
 
       var repository = DataRepositoryHttp(
+        'foo',
         'api_http',
         client: client,
         sourcePath: 'get',
