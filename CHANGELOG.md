@@ -5,6 +5,7 @@
 - mercury_client: ^1.1.10
 - swiss_knife: ^2.5.12
 - json_object_mapper: ^1.1.2
+- CI: dartanalyzer
 
 ## 1.0.11
 
