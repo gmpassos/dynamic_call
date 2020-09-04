@@ -1,3 +1,9 @@
+## 1.0.13
+
+- pedantic: ^1.9.2
+- test: ^1.15.3
+- test_coverage: ^0.4.3
+
 ## 1.0.12
 
 - 1st working version of `DataSource` framework.
