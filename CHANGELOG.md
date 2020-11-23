@@ -1,3 +1,12 @@
+## 1.0.14
+
+- `DataSourceOperationHttp`:
+  - Added `baseURLProxy`.
+  - Added `samples`.
+- swiss_knife: ^2.5.18
+- mercury_client: ^1.1.13
+- json_object_mapper: ^1.1.3
+
 ## 1.0.13
 
 - pedantic: ^1.9.2

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dynamic_call/dynamic_call.dart';
 import 'package:json_object_mapper/json_object_mapper.dart';
 import 'package:swiss_knife/swiss_knife.dart';
@@ -218,9 +220,9 @@ DataSourceOperation getDataSourceOperation(String name) {
       return DataSourceOperation.get;
     case 'find':
       return DataSourceOperation.find;
-    case 'findByID':
+    case 'findbyid':
       return DataSourceOperation.findByID;
-    case 'findByIDRange':
+    case 'findbyidrange':
       return DataSourceOperation.findByIDRange;
     case 'put':
       return DataSourceOperation.put;
@@ -302,6 +304,32 @@ class DataSourceResolver<T> {
   DataSource<T> resolveDataSource() {
     _dataSource ??= DataSource.byID(id);
     return _dataSource;
+  }
+
+  Future<DataSource<T>> resolveDataSourceAsync([Duration timeout]) async {
+    var dataSource = resolveDataSource();
+    if (dataSource != null) return dataSource;
+
+    timeout ??= Duration(seconds: 2);
+
+    var completer = Completer<DataSource<T>>();
+
+    var listen = DataHandler.onRegister.listen((_) {
+      if (!completer.isCompleted && resolveDataSource() != null) {
+        completer.complete(resolveDataSource());
+      }
+    });
+
+    Future.delayed(timeout, () {
+      if (!completer.isCompleted) {
+        completer.complete(resolveDataSource());
+      }
+    });
+
+    return completer.future.then((value) {
+      listen.cancel();
+      return value;
+    });
   }
 
   @override
@@ -914,10 +942,21 @@ class DataCallHttp extends HttpCall {
   }
 }
 
+String DEFAULT_DATA_SOURCE_BASE_URL;
+
+String resolveDataSourceBaseURL(String url) {
+  var baseURL = DEFAULT_DATA_SOURCE_BASE_URL;
+  if (isEmptyString(baseURL, trim: true)) {
+    baseURL = null;
+  }
+  return resolveURL(url, baseURL: baseURL);
+}
+
 class DataSourceOperationHttp<T> {
   final DataSourceOperation operation;
 
   String baseURL;
+  String baseURLProxy;
 
   HttpClient client;
   HttpMethod method;
@@ -929,29 +968,35 @@ class DataSourceOperationHttp<T> {
   DataTransformerTo<T> transformResponse;
   JSONTransformer jsonTransformer;
 
-  DataCallHttp _httpConfig;
+  Map<String, dynamic> samples;
 
   DataSourceOperationHttp(this.operation,
       {this.baseURL,
+      this.baseURLProxy,
       this.client,
       this.method,
       this.path,
-      this.fullPath,
+      this.fullPath = false,
       this.parameters,
       this.body,
       this.transformResponse,
-      dynamic jsonTransformer})
+      dynamic jsonTransformer,
+      this.samples})
       : jsonTransformer = JSONTransformer.from(jsonTransformer);
 
   Map toJsonMap() {
     return removeNullEntries({
       'operation': getDataSourceOperationName(operation),
       'baseURL': baseURL,
+      if (isNotEmptyString(baseURLProxy)) 'baseURLProxy': baseURLProxy,
       'method': getHttpMethodName(method),
       'path': path,
       'fullPath': fullPath,
-      'parameters': parameters,
+      if (isNotEmptyObject(parameters)) 'parameters': parameters,
       'body': body,
+      if (jsonTransformer != null)
+        'jsonTransformer': jsonTransformer.toString(),
+      if (samples != null) 'samples': samples
     });
   }
 
@@ -969,7 +1014,14 @@ class DataSourceOperationHttp<T> {
     if (config is Map) {
       var operation = getDataSourceOperation(
           parseString(findKeyValue(config, ['operation', 'op'], true)));
+
       var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
+      baseURL = resolveDataSourceBaseURL(baseURL);
+
+      var baseURLProxy =
+          parseString(findKeyValue(config, ['baseurlproxy', 'urlproxy'], true));
+      baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+
       var method =
           getHttpMethod(parseString(findKeyValue(config, ['method'], true)));
       var path = parseString(findKeyValue(config, ['path'], true));
@@ -983,22 +1035,44 @@ class DataSourceOperationHttp<T> {
           ['jsonTransformer', 'transformResponse', 'transform', 'transformer'],
           true);
 
+      var samples = findKeyValue(config, ['samples'], true);
+
+      Map<String, dynamic> samplesMap;
+      if (samples is Map) {
+        samplesMap = Map<String, dynamic>.fromEntries(
+            samples.entries.map((e) => MapEntry('${e.key}', e.value)));
+      }
+
       return DataSourceOperationHttp(operation,
           baseURL: baseURL,
+          baseURLProxy: baseURLProxy,
           method: method,
           path: path,
           fullPath: fullPath,
           parameters: parameters,
           body: body,
-          jsonTransformer: jsonTransformer);
+          jsonTransformer: jsonTransformer,
+          samples: samplesMap);
     }
 
     return null;
   }
 
+  String get httpConfigBaseURL {
+    if (isNotEmptyString(baseURLProxy)) {
+      return baseURLProxy.endsWith('/')
+          ? '$baseURLProxy$baseURL'
+          : '$baseURLProxy/$baseURL';
+    } else {
+      return baseURL;
+    }
+  }
+
+  DataCallHttp _httpConfig;
+
   DataCallHttp get httpConfig {
     _httpConfig ??= DataCallHttp(
-        baseURL: baseURL,
+        baseURL: httpConfigBaseURL,
         client: client,
         method: method,
         path: path,
@@ -1010,14 +1084,35 @@ class DataSourceOperationHttp<T> {
   }
 
   Future<T> call(Map<String, dynamic> parameters) async {
-    dynamic response = await httpConfig.callAndResolve(parameters);
+    var needCall = true;
+    dynamic response;
+
+    if (parameters != null && parameters.containsKey('SAMPLE')) {
+      var sampleId = parameters['SAMPLE'];
+      var sample = samples != null ? samples[sampleId] : null;
+
+      print('SAMPLE: $sampleId');
+      print(sample);
+
+      needCall = false;
+      response = sample;
+    }
+
+    if (needCall) {
+      response = await httpConfig.callAndResolve(parameters);
+    }
 
     if (transformResponse != null) {
       response = transformResponse(response);
     }
 
     if (jsonTransformer != null) {
+      print('----------------------------------------------');
+      print('jsonTransformer:');
+      print(response);
       response = jsonTransformer.transform(response);
+      print(response);
+      print('----------------------------------------------');
     }
 
     return response;
@@ -1050,6 +1145,7 @@ class DataSourceOperationHttp<T> {
 /// A [DataSource] based in a [DataCallHttp] for requests.
 class DataSourceHttp<T> extends DataSource<T> {
   final String baseURL;
+  final String baseURLProxy;
   final dynamic parameters;
 
   final DataSourceOperationHttp opGet;
@@ -1059,6 +1155,7 @@ class DataSourceHttp<T> extends DataSource<T> {
 
   DataSourceHttp(String domain, String name,
       {this.baseURL,
+      this.baseURLProxy,
       this.parameters,
       this.opGet,
       this.opFind,
@@ -1081,11 +1178,14 @@ class DataSourceHttp<T> extends DataSource<T> {
       'domain': domain,
       'name': name,
       'baseURL': baseURL,
-      'parameters': HttpCall.toQueryParameters(parameters),
-      'opGet': _opToJsonMap(opGet),
-      'opFind': _opToJsonMap(opFind),
-      'opFindByID': _opToJsonMap(opFindByID),
-      'opFindByIDRange': _opToJsonMap(opFindByIDRange),
+      if (isNotEmptyString(baseURLProxy)) 'baseURLProxy': baseURLProxy,
+      if (isNotEmptyObject(parameters))
+        'parameters': HttpCall.toQueryParameters(parameters),
+      if (opGet != null) 'opGet': _opToJsonMap(opGet),
+      if (opFind != null) 'opFind': _opToJsonMap(opFind),
+      if (opFindByID != null) 'opFindByID': _opToJsonMap(opFindByID),
+      if (opFindByIDRange != null)
+        'opFindByIDRange': _opToJsonMap(opFindByIDRange),
     });
   }
 
@@ -1095,6 +1195,10 @@ class DataSourceHttp<T> extends DataSource<T> {
 
     if (map['baseURL'] == baseURL) {
       map.remove('baseURL');
+    }
+
+    if (map['baseURLProxy'] == baseURLProxy) {
+      map.remove('baseURLProxy');
     }
 
     var opParameters = map['parameters'];
@@ -1144,6 +1248,12 @@ class DataSourceHttp<T> extends DataSource<T> {
       name = parseString(findKeyValue(config, ['name'], true), name);
 
       var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
+      baseURL = resolveDataSourceBaseURL(baseURL);
+
+      var baseURLProxy =
+          parseString(findKeyValue(config, ['baseurlproxy', 'urlproxy'], true));
+      baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+
       var parameters =
           findKeyValue(config, ['parameters', 'args', 'properties'], true);
 
@@ -1158,6 +1268,7 @@ class DataSourceHttp<T> extends DataSource<T> {
 
       return DataSourceHttp(domain, name,
           baseURL: baseURL,
+          baseURLProxy: baseURLProxy,
           parameters: parameters,
           opGet: opGet,
           opFind: opFind,
@@ -1194,6 +1305,7 @@ class DataSourceHttp<T> extends DataSource<T> {
   void _opSetBaseURL(DataSourceOperationHttp op) {
     if (op != null) {
       op.baseURL ??= baseURL;
+      op.baseURLProxy ??= baseURLProxy;
     }
   }
 
@@ -1254,11 +1366,12 @@ class DataSourceHttp<T> extends DataSource<T> {
   int get hashCode =>
       super.hashCode ^
       baseURL.hashCode ^
+      (baseURLProxy != null ? baseURLProxy.hashCode : 0) ^
       deepHashCode(parameters) ^
-      opGet.hashCode ^
-      opFind.hashCode ^
-      opFindByID.hashCode ^
-      opFindByIDRange.hashCode;
+      (opGet != null ? opGet.hashCode : 0) ^
+      (opFind != null ? opFind.hashCode : 0) ^
+      (opFindByID != null ? opFindByID.hashCode : 0) ^
+      (opFindByIDRange != null ? opFindByIDRange.hashCode : 0);
 }
 
 /// A [DataReceiver] based in a [DataCallHttp] for requests.
@@ -1423,6 +1536,9 @@ class DataSourceCall<T> {
 
   DataSource<T> get dataSource => dataSourceResolver.resolveDataSource();
 
+  Future<DataSource<T>> get dataSourceAsync async =>
+      dataSourceResolver.resolveDataSourceAsync();
+
   String get name => dataSourceResolver.name;
 
   String get operationName => getDataSourceOperationName(operation);
@@ -1451,6 +1567,9 @@ class DataSourceCall<T> {
         return deepCopy<List<T>>(_lastResponse.result);
       }
     }
+
+    var dataSource = this.dataSource;
+    dataSource ??= await dataSourceAsync;
 
     var result = await dataSource.doOperation(operation, parameters, dataList);
     _lastResponse = DataSourceResponse(operation, parameters, dataList, result);
