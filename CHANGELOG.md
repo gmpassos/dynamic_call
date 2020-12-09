@@ -1,3 +1,9 @@
+## 1.0.15
+
+- Fix compatibility with the new version of `mercury_client`.
+- mercury_client: ^1.1.14
+- swiss_knife: ^2.5.19
+
 ## 1.0.14
 
 - `DataSourceOperationHttp`:

@@ -422,7 +422,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
     return response
         .then((r) => _processResponse(
-            dynCall, callParameters, requestParameters, r.body))
+            dynCall, callParameters, requestParameters, r.bodyAsString))
         .catchError((e) {
       var httpError = e is HttpError ? e : null;
 
@@ -497,7 +497,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
     return response
         .then((r) => _processResponse(
-            dynCall, callParameters, requestParameters, r.body))
+            dynCall, callParameters, requestParameters, r.bodyAsString))
         .catchError((e, s) {
       var httpError = e is HttpError ? e : null;
 
