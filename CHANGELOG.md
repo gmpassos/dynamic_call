@@ -1,3 +1,10 @@
+## 1.0.16
+
+- Added parameter `noQueryString`.
+- Added `buildURI`, in case you only want the call URI.
+- mercury_client: ^1.1.16
+- swiss_knife: ^2.5.20
+
 ## 1.0.15
 
 - Fix compatibility with the new version of `mercury_client`.

@@ -110,7 +110,7 @@ class AppSystem {
 
 }
 
-// Example of usage of the system and integrate with an WS API:
+// Example of usage of the system and integrate with a WS API:
 
 main() async {
   

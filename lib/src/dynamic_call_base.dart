@@ -33,6 +33,13 @@ class DynCall<E, O> {
 
   DynCallExecutor<E> executor;
 
+  /// Returns the [call] URI, without perform a [call].
+  String buildURI([Map<String, dynamic> inputParameters]) {
+    if (executor == null) return null;
+    var callParameters = buildCallParameters(inputParameters);
+    return executor.buildURI(this, callParameters);
+  }
+
   /// Executes the call using [inputParameters] (with fields specified at [input]) and calling [callback] after.
   Future<O> call(
       [Map<String, dynamic> inputParameters, SysCallCallback<O> callback]) {
@@ -211,6 +218,8 @@ typedef DynCallCredentialParser<E> = DynCallCredential Function(
 abstract class DynCallExecutor<E> {
   Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters);
 
+  String buildURI<X>(DynCall<E, X> dynCall, Map<String, String> parameters);
+
   void setCredential(DynCallCredential credential) {}
 }
 
@@ -223,6 +232,12 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   @override
   Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters) {
     return Future.value(response);
+  }
+
+  @override
+  String buildURI<X>(
+      DynCall<E, X> dynCall, Map<String, String> callParameters) {
+    throw UnsupportedError('No URI for static calls!');
   }
 }
 
@@ -239,6 +254,12 @@ class DynCallFunctionExecutor<R, T> extends DynCallExecutor<R> {
   Future<R> call<X>(DynCall<R, X> dynCall, Map<String, String> parameters) {
     var dynCallCast = dynCall as DynCall<R, T>;
     return function(dynCallCast, parameters);
+  }
+
+  @override
+  String buildURI<X>(
+      DynCall<R, X> dynCall, Map<String, String> callParameters) {
+    throw UnsupportedError('No URI for function calls!');
   }
 }
 
@@ -324,6 +345,9 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   /// Query parameters with values from [ParameterProvider].
   Map<String, ParameterProvider> parametersProviders;
 
+  /// If [true] will avoid use of `queryString` in request URL.
+  bool noQueryString;
+
   /// The Credential for the HTTP request.
   Credential authorization;
 
@@ -365,6 +389,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       this.parametersMap,
       this.parametersStatic,
       this.parametersProviders,
+      this.noQueryString,
       this.authorization,
       this.authorizationFields,
       this.body,
@@ -417,6 +442,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         fullPath: fullPath,
         authorization: authorization,
         parameters: requestParameters,
+        noQueryString: noQueryString,
         body: body,
         contentType: bodyType);
 
@@ -492,6 +518,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
         fullPath: fullPath,
         authorization: authorization,
         parameters: requestParameters,
+        noQueryString: noQueryString,
         body: body,
         contentType: bodyType);
 
@@ -677,6 +704,23 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     return requestParameters.isNotEmpty ? requestParameters : null;
   }
 
+  @override
+  String buildURI<X>(
+      DynCall<E, X> dynCall, Map<String, String> callParameters) {
+    var requestParameters = buildParameters(callParameters);
+    var authorization = buildAuthorization(callParameters);
+
+    var authorizationFromCredential = authorization != null
+        ? Authorization.fromCredential(authorization)
+        : null;
+
+    return httpClient.buildRequestURL(method, path,
+        fullPath: fullPath,
+        authorization: authorizationFromCredential,
+        parameters: requestParameters,
+        noQueryString: noQueryString);
+  }
+
   Credential buildAuthorization(Map<String, String> parameters) {
     if (authorization != null) {
       return authorization;
@@ -766,6 +810,7 @@ class DynCallHttpExecutorFactory {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
       dynamic body,
@@ -801,6 +846,7 @@ class DynCallHttpExecutorFactory {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
@@ -821,6 +867,7 @@ class DynCallHttpExecutorFactory {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
       dynamic body,
@@ -840,6 +887,7 @@ class DynCallHttpExecutorFactory {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
@@ -885,6 +933,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
       dynamic body,
@@ -901,6 +950,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
@@ -922,6 +972,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
       dynamic body,
@@ -940,6 +991,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
         body: body,
