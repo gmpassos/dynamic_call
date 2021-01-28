@@ -11,6 +11,10 @@ typedef SysCallOutputFilter<O, E> = O Function(E output);
 typedef SysCallCallback<O> = void Function(
     O output, Map<String, dynamic> parameters);
 
+/// Progress function.
+typedef SysProgressListener<O> = void Function(
+    int loaded, int total, double ratio, bool upload);
+
 /// A Dynamic Call specification
 class DynCall<E, O> {
   /// Input fields of the call.
@@ -42,7 +46,9 @@ class DynCall<E, O> {
 
   /// Executes the call using [inputParameters] (with fields specified at [input]) and calling [callback] after.
   Future<O> call(
-      [Map<String, dynamic> inputParameters, SysCallCallback<O> callback]) {
+      [Map<String, dynamic> inputParameters,
+      SysCallCallback<O> callback,
+      SysProgressListener onProgress]) {
     if (executor == null) {
       var out = parseOutput(null);
 
@@ -59,7 +65,7 @@ class DynCall<E, O> {
 
     var callParameters = buildCallParameters(inputParameters);
 
-    var call = executor.call(this, callParameters);
+    var call = executor.call(this, callParameters, onProgress);
     var calMapped = call.then(mapOutput);
 
     if (callback == null) return calMapped;
@@ -216,7 +222,8 @@ typedef DynCallCredentialParser<E> = DynCallCredential Function(
 
 /// Abstract class for the executor implementation.
 abstract class DynCallExecutor<E> {
-  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters);
+  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters,
+      SysProgressListener onProgress);
 
   String buildURI<X>(DynCall<E, X> dynCall, Map<String, String> parameters);
 
@@ -230,7 +237,17 @@ class DynCallStaticExecutor<E> extends DynCallExecutor<E> {
   DynCallStaticExecutor(this.response);
 
   @override
-  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters) {
+  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> parameters,
+      SysProgressListener onProgress) {
+    if (onProgress != null) {
+      try {
+        onProgress(1, 1, 1.0, false);
+      } catch (e, s) {
+        print(e);
+        print(s);
+      }
+    }
+
     return Future.value(response);
   }
 
@@ -251,9 +268,24 @@ class DynCallFunctionExecutor<R, T> extends DynCallExecutor<R> {
   DynCallFunctionExecutor(this.function);
 
   @override
-  Future<R> call<X>(DynCall<R, X> dynCall, Map<String, String> parameters) {
+  Future<R> call<X>(DynCall<R, X> dynCall, Map<String, String> parameters,
+      SysProgressListener onProgress) {
     var dynCallCast = dynCall as DynCall<R, T>;
-    return function(dynCallCast, parameters);
+
+    if (onProgress != null) {
+      return function(dynCallCast, parameters).then((value) {
+        try {
+          onProgress(1, 1, 1.0, false);
+        } catch (e, s) {
+          print(e);
+          print(s);
+        }
+
+        return value;
+      });
+    } else {
+      return function(dynCallCast, parameters);
+    }
   }
 
   @override
@@ -270,11 +302,13 @@ class DynCallHttpClient extends HttpClient {
 
   DynCallHttpExecutor<E> executor<E>(HttpMethod method, String path,
       {Map<String, String> parametersMap,
+      String queryString,
       List<String> authorizationFields,
       E errorResponse,
       int errorMaxRetries = 3}) {
     return DynCallHttpExecutor(this, method, path,
         parametersMap: parametersMap,
+        queryString: queryString,
         authorizationFields: authorizationFields,
         errorResponse: errorResponse,
         errorMaxRetries: 3);
@@ -345,6 +379,9 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   /// Query parameters with values from [ParameterProvider].
   Map<String, ParameterProvider> parametersProviders;
 
+  /// Forces the URI query string.
+  String queryString;
+
   /// If [true] will avoid use of `queryString` in request URL.
   bool noQueryString;
 
@@ -389,6 +426,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       this.parametersMap,
       this.parametersStatic,
       this.parametersProviders,
+      this.queryString,
       this.noQueryString,
       this.authorization,
       this.authorizationFields,
@@ -404,7 +442,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       this.onHttpError});
 
   @override
-  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> callParameters) {
+  Future<E> call<X>(DynCall<E, X> dynCall, Map<String, String> callParameters,
+      SysProgressListener onProgress) {
     var requestParameters = buildParameters(callParameters);
     var authorization = buildAuthorization(callParameters);
     var body = buildBody(callParameters, requestParameters);
@@ -415,10 +454,10 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
     if (maxRetries > 0 && dynCall.allowRetries) {
       return _callWithRetries(dynCall, callParameters, authorization,
-          requestParameters, body, bodyType, maxRetries, []);
+          requestParameters, body, bodyType, maxRetries, [], onProgress);
     } else {
       return _callNoRetries(dynCall, callParameters, authorization,
-          requestParameters, body, bodyType);
+          requestParameters, body, bodyType, onProgress);
     }
   }
 
@@ -437,14 +476,20 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       Credential authorization,
       Map<String, String> requestParameters,
       dynamic body,
-      String bodyType) {
+      String bodyType,
+      SysProgressListener onProgress) {
+    var progressListener =
+        onProgress != null ? (r, l, t, p, u) => onProgress(l, t, p, u) : null;
+
     var response = httpClient.request(method, path,
         fullPath: fullPath,
         authorization: authorization,
         parameters: requestParameters,
+        queryString: queryString,
         noQueryString: noQueryString,
         body: body,
-        contentType: bodyType);
+        contentType: bodyType,
+        progressListener: progressListener);
 
     return response
         .then((r) => _processResponse(
@@ -475,33 +520,50 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       dynamic body,
       String bodyType,
       int maxErrorRetries,
-      List<HttpError> errors) {
+      List<HttpError> errors,
+      SysProgressListener onProgress) {
     var delay = errors.length <= 2 ? 200 : 500;
 
     if (maxErrorRetries <= 0) {
       if (errors.isEmpty) {
         return _callNoRetries(dynCall, callParameters, authorization,
-            requestParameters, body, bodyType);
+            requestParameters, body, bodyType, onProgress);
       } else {
         //print("delay... $delay");
         return Future.delayed(
             Duration(milliseconds: delay),
             () => _callNoRetries(dynCall, callParameters, authorization,
-                requestParameters, body, bodyType));
+                requestParameters, body, bodyType, onProgress));
       }
     }
 
     //print("_callWithRetries> $method $path > maxErrorRetries: $maxErrorRetries ; errors: $errors");
 
     if (errors.isEmpty) {
-      return _callWithRetriesImpl(dynCall, callParameters, authorization,
-          requestParameters, body, bodyType, maxErrorRetries, errors);
+      return _callWithRetriesImpl(
+          dynCall,
+          callParameters,
+          authorization,
+          requestParameters,
+          body,
+          bodyType,
+          maxErrorRetries,
+          errors,
+          onProgress);
     } else {
       //print("delay... $delay");
       return Future.delayed(
           Duration(milliseconds: delay),
-          () => _callWithRetriesImpl(dynCall, callParameters, authorization,
-              requestParameters, body, bodyType, maxErrorRetries, errors));
+          () => _callWithRetriesImpl(
+              dynCall,
+              callParameters,
+              authorization,
+              requestParameters,
+              body,
+              bodyType,
+              maxErrorRetries,
+              errors,
+              onProgress));
     }
   }
 
@@ -513,14 +575,20 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       dynamic body,
       String bodyType,
       int maxErrorRetries,
-      List<HttpError> errors) {
+      List<HttpError> errors,
+      SysProgressListener onProgress) {
+    var progressListener =
+        onProgress != null ? (r, l, t, p, u) => onProgress(l, t, p, u) : null;
+
     var response = httpClient.request(method, path,
         fullPath: fullPath,
         authorization: authorization,
         parameters: requestParameters,
+        queryString: queryString,
         noQueryString: noQueryString,
         body: body,
-        contentType: bodyType);
+        contentType: bodyType,
+        progressListener: progressListener);
 
     return response
         .then((r) => _processResponse(
@@ -548,7 +616,8 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
             body,
             bodyType,
             maxErrorRetries - 1,
-            errors..add(e));
+            errors..add(e),
+            onProgress);
       } else if (errorAnswer == OnHttpErrorAnswer.ERROR) {
         return _processError(dynCall, httpError);
       } else {
@@ -810,6 +879,7 @@ class DynCallHttpExecutorFactory {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      String queryString,
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
@@ -846,6 +916,7 @@ class DynCallHttpExecutorFactory {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        queryString: queryString,
         noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
@@ -867,6 +938,7 @@ class DynCallHttpExecutorFactory {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      String queryString,
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
@@ -887,6 +959,7 @@ class DynCallHttpExecutorFactory {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        queryString: queryString,
         noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,
@@ -933,6 +1006,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       Map<String, String> parametersMap,
       Map<String, String> parametersStatic,
       Map<String, ParameterProvider> parametersProviders,
+      String queryString,
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
@@ -950,6 +1024,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         parametersMap: parametersMap,
         parametersStatic: parametersStatic,
         parametersProviders: parametersProviders,
+        queryString: queryString,
         noQueryString: noQueryString,
         authorization: authorization,
         authorizationFields: authorizationFields,

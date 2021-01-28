@@ -1,3 +1,10 @@
+## 1.0.17
+
+- `DynCall.call`: Added parameter `onProgress`.
+- `DynCallHttpExecutor`: Added `queryString`.
+- mercury_client: ^1.1.17
+- swiss_knife: ^2.5.25
+
 ## 1.0.16
 
 - Added parameter `noQueryString`.
