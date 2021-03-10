@@ -1,3 +1,7 @@
+## 1.0.18
+
+- Added `HTTPJSONOutputFilter`.
+
 ## 1.0.17
 
 - `DynCall.call`: Added parameter `onProgress`.

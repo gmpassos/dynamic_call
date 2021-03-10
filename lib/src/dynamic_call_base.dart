@@ -1,4 +1,4 @@
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:mercury_client/mercury_client.dart';
 import 'package:swiss_knife/swiss_knife.dart';
@@ -347,6 +347,8 @@ typedef HTTPOutputValidator = bool Function(String output,
     Map<String, String> callParameters, Map<String, String> requestParameters);
 typedef HTTPOutputFilter = String Function(String output,
     Map<String, String> callParameters, Map<String, String> requestParameters);
+typedef HTTPJSONOutputFilter = dynamic Function(dynamic json,
+    Map<String, String> callParameters, Map<String, String> requestParameters);
 
 typedef BodyBuilderFunctionString = String Function(
     Map<String, String> callParameters, Map<String, String> requestParameters);
@@ -403,10 +405,14 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   /// Function to validate if the request output is valid.
   HTTPOutputValidator outputValidator;
 
-  /// Filter for the output, to transform the request response.
+  /// Filter for the output (as [String]), to transform the request response to another [String].
   HTTPOutputFilter outputFilter;
 
-  /// Filter for the output, to transform the request response using a pattern.
+  /// Filter for the output (as JSON), to transform the request response to another JSON.
+  HTTPJSONOutputFilter jsonOutputFilter;
+
+  /// Filter for the output, to transform the request response using a String pattern.
+  /// See: [buildStringPattern].
   String outputFilterPattern;
 
   /// Function called for any output received. Useful for logs.
@@ -435,6 +441,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       this.bodyType,
       this.outputValidator,
       this.outputFilter,
+      this.jsonOutputFilter,
       this.outputFilterPattern,
       this.outputInterceptor,
       this.errorResponse,
@@ -658,6 +665,10 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     if (outputFilter != null) {
       responseContent =
           outputFilter(responseContent, callParameters, requestParameters);
+    } else if (jsonOutputFilter != null) {
+      var json = responseContent != null ? jsonDecode(responseContent) : null;
+      var json2 = jsonOutputFilter(json, callParameters, requestParameters);
+      responseContent = jsonEncode(json2);
     } else if (outputFilterPattern != null) {
       var json;
       if (dynCall.outputType == DynCallType.JSON) {
@@ -890,6 +901,7 @@ class DynCallHttpExecutorFactory {
       int errorMaxRetries = 3,
       HTTPOutputValidator outputValidator,
       HTTPOutputFilter outputFilter,
+      HTTPJSONOutputFilter jsonOutputFilter,
       String outputFilterPattern,
       HTTPOutputInterceptor outputInterceptor}) {
     path = _notEmpty(path);
@@ -927,6 +939,7 @@ class DynCallHttpExecutorFactory {
         errorMaxRetries: errorMaxRetries,
         outputValidator: outputValidator,
         outputFilter: outputFilter,
+        jsonOutputFilter: jsonOutputFilter,
         outputFilterPattern: outputFilterPattern,
         outputInterceptor: outputInterceptor);
     return executor;
@@ -949,6 +962,7 @@ class DynCallHttpExecutorFactory {
       int errorMaxRetries = 3,
       HTTPOutputValidator outputValidator,
       HTTPOutputFilter outputFilter,
+      HTTPJSONOutputFilter jsonOutputFilter,
       String outputFilterPattern,
       HTTPOutputInterceptor outputInterceptor,
       ExecutorWrapper executorWrapper}) {
@@ -970,6 +984,7 @@ class DynCallHttpExecutorFactory {
         errorMaxRetries: errorMaxRetries,
         outputValidator: outputValidator,
         outputFilter: outputFilter,
+        jsonOutputFilter: jsonOutputFilter,
         outputFilterPattern: outputFilterPattern,
         outputInterceptor: outputInterceptor);
 
@@ -1017,6 +1032,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       int errorMaxRetries = 3,
       HTTPOutputValidator outputValidator,
       HTTPOutputFilter outputFilter,
+      HTTPJSONOutputFilter jsonOutputFilter,
       String outputFilterPattern}) {
     return factory.define(call, method,
         path: path,
@@ -1035,6 +1051,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         errorMaxRetries: errorMaxRetries,
         outputValidator: outputValidator,
         outputFilter: outputFilter,
+        jsonOutputFilter: jsonOutputFilter,
         outputFilterPattern: outputFilterPattern);
   }
 
@@ -1057,6 +1074,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       int errorMaxRetries = 3,
       HTTPOutputValidator outputValidator,
       HTTPOutputFilter outputFilter,
+      HTTPJSONOutputFilter jsonOutputFilter,
       String outputFilterPattern}) {
     var credentialInterceptor = _CredentialInterceptor(credentialParser);
 
@@ -1076,6 +1094,7 @@ class DynCallHttpExecutorFactory_builder<E, O> {
         errorMaxRetries: errorMaxRetries,
         outputValidator: outputValidator,
         outputFilter: outputFilter,
+        jsonOutputFilter: jsonOutputFilter,
         outputFilterPattern: outputFilterPattern,
         outputInterceptor: credentialInterceptor.interceptOutput);
   }

@@ -1,20 +1,26 @@
 name: dynamic_call
 description: Dynamic Call framework, including API calls integrations (HTTP, RESTful).
-version: 1.0.17
+version: 1.0.18
 homepage: https://github.com/gmpassos/dynamic_call
 
 environment:
   sdk: '>=2.7.0 <3.0.0'
 
 dependencies:
-  mercury_client: ^1.1.17
-    #path: ../mercury_client
-  swiss_knife: ^2.5.25
-    #path: ../swiss_knife
+  mercury_client: ^1.1.19
+  swiss_knife: ^2.5.26
   json_object_mapper: ^1.1.3
-    #path: ../json_object_mapper
 
 dev_dependencies:
   pedantic: ^1.9.2
   test: ^1.15.3
-  test_coverage: ^0.4.3
+  #test_coverage: ^0.4.3
+
+#dependency_overrides:
+#  mercury_client:
+#    path: ../mercury_client
+#  swiss_knife:
+#    path: ../swiss_knife
+#  json_object_mapper:
+#    path: ../json_object_mapper
+
