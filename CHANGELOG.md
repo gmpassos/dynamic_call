@@ -1,3 +1,15 @@
+## 2.0.0-nullsafety.1
+
+- Dart 2.12.0:
+  - Sound null safety compatibility.
+  - Update CI dart commands.
+  - sdk: '>=2.12.0 <3.0.0'
+- swiss_knife: ^3.0.2
+- mercury_client: ^2.0.0-nullsafety.2
+- json_object_mapper: ^2.0.0
+- pedantic: ^1.11.0
+- test: ^1.16.7
+  
 ## 1.0.18
 
 - Added `HTTPJSONOutputFilter`.

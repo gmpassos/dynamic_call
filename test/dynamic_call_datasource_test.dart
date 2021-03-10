@@ -13,17 +13,17 @@ import 'package:test/test.dart';
  */
 
 class TestServer {
-  io.HttpServer server;
+  io.HttpServer? server;
 
-  Completer _serverOpen;
+  Completer? _serverOpen;
 
-  int get port => server != null ? server.port : -1;
+  int get port => server != null ? server!.port : -1;
 
-  bool get isOpen => _serverOpen != null ? _serverOpen.isCompleted : false;
+  bool get isOpen => _serverOpen != null ? _serverOpen!.isCompleted : false;
 
   void waitOpen() async {
     if (isOpen) return;
-    await _serverOpen.future;
+    await _serverOpen!.future;
   }
 
   void open() async {
@@ -36,9 +36,9 @@ class TestServer {
 
     print('Server running: $server at port: $port');
 
-    _serverOpen.complete(true);
+    _serverOpen!.complete(true);
 
-    await for (io.HttpRequest request in server) {
+    await for (io.HttpRequest request in server!) {
       var uri = request.uri;
       var path = uri.path;
       var query = uri.queryParameters;
@@ -56,8 +56,8 @@ class TestServer {
       } else if (mathFinByIDRange.isNotEmpty) {
         var match = mathFinByIDRange.first;
 
-        var from = int.parse(match.group(1));
-        var to = int.parse(match.group(2));
+        var from = int.parse(match.group(1)!);
+        var to = int.parse(match.group(2)!);
 
         var list = <int>[];
         for (var i = from; i <= to; i++) {
@@ -66,12 +66,8 @@ class TestServer {
 
         response = '[' + list.join(',') + ']';
       } else if (path.endsWith('put')) {
-        if (body == null) {
-          response = 'null';
-        } else {
-          response = RegExp(r'^\[.*?\]$').hasMatch(body) ? body : '[$body]';
-        }
-      } else if (query != null && query.isNotEmpty) {
+        response = RegExp(r'^\[.*?\]$').hasMatch(body) ? body : '[$body]';
+      } else if (query.isNotEmpty) {
         if (query['name'] == 'joe') {
           response = '[1001]';
         } else if (query['name'] == 'smith') {
@@ -95,7 +91,7 @@ class TestServer {
   }
 
   Future<String> _decodeBody(
-      io.ContentType contentType, io.HttpRequest r) async {
+      io.ContentType? contentType, io.HttpRequest r) async {
     if (contentType != null) {
       var charset = contentType.charset;
 
@@ -117,7 +113,7 @@ class TestServer {
 
   void close() async {
     print('Closing server $server');
-    await server.close(force: true);
+    await server!.close(force: true);
   }
 }
 
@@ -129,7 +125,7 @@ class TestServer {
 
 void main() {
   group('DataRepository', () {
-    TestServer testServer;
+    late TestServer testServer;
 
     setUp(() {
       testServer = TestServer();
@@ -141,12 +137,12 @@ void main() {
     });
 
     test('DynCall', () async {
-      var callGet = DynCall<String, List<int>>([], DynCallType.STRING,
+      var callGet = DynCall<String, List<int>?>([], DynCallType.STRING,
           outputFilter: (s) => parseIntsFromInlineList(s));
 
       callGet.executor = DynCallStaticExecutor<String>('1,2,3,4,5,6');
 
-      var callPut = DynCall<String, List<int>>([], DynCallType.STRING,
+      var callPut = DynCall<String, List<int>?>([], DynCallType.STRING,
           outputFilter: (s) => parseIntsFromInlineList(s));
 
       callPut.executor = DynCallStaticExecutor<String>('10,11,12');

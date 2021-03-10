@@ -2,9 +2,9 @@ import 'package:dynamic_call/dynamic_call.dart';
 import 'package:test/test.dart';
 
 class UserLogin {
-  int id;
+  int? id;
 
-  String username;
+  String? username;
 
   UserLogin(this.id, this.username);
 
@@ -21,7 +21,7 @@ void main() {
     test('callLogin', () async {
       var callLogin = DynCall<Map, UserLogin>(
           ['username', 'password'], DynCallType.JSON,
-          outputFilter: (Map userJson) => UserLogin.parse(userJson));
+          outputFilter: (Map? userJson) => UserLogin.parse(userJson));
 
       callLogin.executor =
           DynCallStaticExecutor<Map>({'id': 101, 'username': 'joe'});
@@ -30,7 +30,7 @@ void main() {
 
       expect(user != null, isTrue);
 
-      expect(user.id, equals(101));
+      expect(user!.id, equals(101));
       expect(user.username, equals('joe'));
     });
 

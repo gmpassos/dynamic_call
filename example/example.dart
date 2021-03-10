@@ -11,7 +11,7 @@ class Sys {
 
   /// Normal method to do the search. Parameter [query] will be
   /// passed to [callSearch] as input field `query`.
-  Future<String> doSearch(String query) {
+  Future<String?> doSearch(String query) {
     return callSearch.call({'query': query});
   }
 }
