@@ -97,10 +97,10 @@ abstract class DataHandler<T> {
       DataTransformerFrom<T> transformerFrom,
       DataTransformerFromList<T> transformerFromList})
       : id = normalizeID(domain, name),
-        _transformerTo = transformerTo,
-        _transformerToList = transformerToList,
-        _transformerFrom = transformerFrom,
-        _transformerFromList = transformerFromList {
+        transformerTo = transformerTo,
+        transformerToList = transformerToList,
+        transformerFrom = transformerFrom,
+        transformerFromList = transformerFromList {
     _check(this);
 
     register ??= true;
@@ -148,47 +148,23 @@ abstract class DataHandler<T> {
     return parts.length == 2 ? parts : null;
   }
 
-  DataTransformerTo<T> _transformerTo;
+  DataTransformerTo<T> transformerTo;
 
-  DataTransformerTo<T> get transformerTo => _transformerTo;
+  DataTransformerToList<T> transformerToList;
 
-  set transformerTo(DataTransformerTo<T> value) {
-    _transformerTo = value;
-  }
+  DataTransformerFrom<T> transformerFrom;
 
-  DataTransformerToList<T> _transformerToList;
-
-  DataTransformerToList<T> get transformerToList => _transformerToList;
-
-  set transformerToList(DataTransformerToList<T> value) {
-    _transformerToList = value;
-  }
-
-  DataTransformerFrom<T> _transformerFrom;
-
-  DataTransformerFrom<T> get transformerFrom => _transformerFrom;
-
-  set transformerFrom(DataTransformerFrom<T> value) {
-    _transformerFrom = value;
-  }
-
-  T transformTo(dynamic o) => doTransformTo(o, _transformerTo);
+  T transformTo(dynamic o) => doTransformTo(o, transformerTo);
 
   List<T> transformToList(dynamic o) =>
-      doTransformToList(o, _transformerTo, _transformerToList);
+      doTransformToList(o, transformerTo, transformerToList);
 
-  DataTransformerFromList<T> _transformerFromList;
+  DataTransformerFromList<T> transformerFromList;
 
-  DataTransformerFromList<T> get transformerFromList => _transformerFromList;
-
-  set transformerFromList(DataTransformerFromList<T> value) {
-    _transformerFromList = value;
-  }
-
-  dynamic transformFrom(T data) => doTransformFrom(data, _transformerFrom);
+  dynamic transformFrom(T data) => doTransformFrom(data, transformerFrom);
 
   dynamic transformFromList(List<T> list) =>
-      doTransformFromList(list, _transformerFrom, _transformerFromList);
+      doTransformFromList(list, transformerFrom, transformerFromList);
 
   @override
   bool operator ==(Object other) =>
@@ -536,48 +512,16 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   bool get isRegistered => DataRepository.byName(domain, name) == this;
 
   @override
-  DataTransformerTo<T> _transformerTo;
+  DataTransformerTo<T> transformerTo;
 
   @override
-  DataTransformerTo<T> get transformerTo => _transformerTo;
+  DataTransformerToList<T> transformerToList;
 
   @override
-  set transformerTo(DataTransformerTo<T> value) {
-    _transformerTo = value;
-  }
+  DataTransformerFrom<T> transformerFrom;
 
   @override
-  DataTransformerToList<T> _transformerToList;
-
-  @override
-  DataTransformerToList<T> get transformerToList => _transformerToList;
-
-  @override
-  set transformerToList(DataTransformerToList<T> value) {
-    _transformerToList = value;
-  }
-
-  @override
-  DataTransformerFrom<T> _transformerFrom;
-
-  @override
-  DataTransformerFrom<T> get transformerFrom => _transformerFrom;
-
-  @override
-  set transformerFrom(DataTransformerFrom<T> value) {
-    _transformerFrom = value;
-  }
-
-  @override
-  DataTransformerFromList<T> _transformerFromList;
-
-  @override
-  DataTransformerFromList<T> get transformerFromList => _transformerFromList;
-
-  @override
-  set transformerFromList(DataTransformerFromList<T> value) {
-    _transformerFromList = value;
-  }
+  DataTransformerFromList<T> transformerFromList;
 
   @override
   Future<List<T>> doOperation(
@@ -626,16 +570,16 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
 
   @override
   dynamic transformFrom(T data) {
-    if (_transformerFrom == null) {
+    if (transformerFrom == null) {
       return data;
     }
-    return _transformerFrom(data);
+    return transformerFrom(data);
   }
 
   @override
   dynamic transformFromList(List<T> list) {
-    if (_transformerFromList != null) {
-      return _transformerFromList(list);
+    if (transformerFromList != null) {
+      return transformerFromList(list);
     }
 
     if (list == null || list.isEmpty) return null;
@@ -644,16 +588,16 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
 
   @override
   T transformTo(o) {
-    if (_transformerTo == null) {
+    if (transformerTo == null) {
       return o;
     }
-    return _transformerTo(o);
+    return transformerTo(o);
   }
 
   @override
   List<T> transformToList(dynamic o) {
-    if (_transformerToList != null) {
-      return _transformerToList(o);
+    if (transformerToList != null) {
+      return transformerToList(o);
     }
 
     if (o == null) return [];
