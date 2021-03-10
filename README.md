@@ -1,6 +1,8 @@
 # Dynamic_Call
 
 [![pub package](https://img.shields.io/pub/v/dynamic_call.svg?logo=dart&logoColor=00b9fc)](https://pub.dartlang.org/packages/dynamic_call)
+[![Null Safety](https://img.shields.io/badge/null-safety-brightgreen)](https://dart.dev/null-safety)
+
 [![CI](https://img.shields.io/github/workflow/status/gmpassos/dynamic_call/Dart%20CI/master?logo=github-actions&logoColor=white)](https://github.com/gmpassos/dynamic_call/actions)
 [![GitHub Tag](https://img.shields.io/github/v/tag/gmpassos/dynamic_call?logo=git&logoColor=white)](https://github.com/gmpassos/dynamic_call/releases)
 [![New Commits](https://img.shields.io/github/commits-since/gmpassos/dynamic_call/latest?logo=git&logoColor=white)](https://github.com/gmpassos/dynamic_call/network)
@@ -8,9 +10,6 @@
 [![Pull Requests](https://img.shields.io/github/issues-pr/gmpassos/dynamic_call?logo=github&logoColor=white)](https://github.com/gmpassos/dynamic_call/pulls)
 [![Code size](https://img.shields.io/github/languages/code-size/gmpassos/dynamic_call?logo=github&logoColor=white)](https://github.com/gmpassos/dynamic_call)
 [![License](https://img.shields.io/github/license/gmpassos/dynamic_call?logo=open-source-initiative&logoColor=green)](https://github.com/gmpassos/dynamic_call/blob/master/LICENSE)
-[![Funding](https://img.shields.io/badge/Donate-yellow?labelColor=666666&style=plastic&logo=liberapay)](https://liberapay.com/gmpassos/donate)
-[![Funding](https://img.shields.io/liberapay/patrons/gmpassos.svg?logo=liberapay)](https://liberapay.com/gmpassos/donate)
-
 
 Dynamic Call framework, including API calls integrations (HTTP, RESTful).
 

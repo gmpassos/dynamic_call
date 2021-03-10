@@ -101,7 +101,7 @@ class DynCall<E, O> {
   }
 
   /// Parses the output of the call to the [outputType] and applying [outputFilter] if needed.
-  O parseOutput(dynamic value) {
+  O parseOutput(Object /*?*/ value) {
     var out = parseExecution(value);
     return mapOutput(out);
   }
@@ -115,7 +115,7 @@ class DynCall<E, O> {
   }
 
   /// Parses a value to the [outputType].
-  E parseExecution(dynamic value) {
+  E parseExecution(Object /*?*/ value) {
     switch (outputType) {
       case DynCallType.BOOL:
         return parseOutputBOOL(value) as E;
@@ -133,7 +133,7 @@ class DynCall<E, O> {
     }
   }
 
-  bool parseOutputBOOL(dynamic value) {
+  bool parseOutputBOOL(Object /*?*/ value) {
     if (value == null) return false;
     if (value is bool) return value;
 
@@ -146,7 +146,7 @@ class DynCall<E, O> {
     return s == 'true' || s == '1' || s == 'yes' || s == 't' || s == 'y';
   }
 
-  String parseOutputSTRING(dynamic value) {
+  String parseOutputSTRING(Object /*?*/ value) {
     if (value == null) return null;
     if (value is String) return value;
 
@@ -154,21 +154,21 @@ class DynCall<E, O> {
     return s;
   }
 
-  int parseOutputINTEGER(dynamic value) {
+  int parseOutputINTEGER(Object /*?*/ value) {
     if (value == null) return null;
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.parse('$value');
   }
 
-  double parseOutputDECIMAL(dynamic value) {
+  double parseOutputDECIMAL(Object /*?*/ value) {
     if (value == null) return null;
     if (value is double) return value;
     if (value is num) return value.toDouble();
     return double.parse('$value');
   }
 
-  dynamic parseOutputJSON(dynamic value) {
+  dynamic parseOutputJSON(Object /*?*/ value) {
     if (value == null) return null;
     if (value is String) return jsonDecode(value);
     if (value is Map) return value;
@@ -190,7 +190,7 @@ class DynCallCredentialHTTP extends DynCallCredential {
 
   DynCallCredentialHTTP(this.credential);
 
-  factory DynCallCredentialHTTP.fromJSONToken(dynamic json) {
+  factory DynCallCredentialHTTP.fromJSONToken(Object /*?*/ json) {
     if (json is Map) {
       var bearerCredential = BearerCredential.fromJSONToken(json);
       return bearerCredential != null
@@ -347,7 +347,7 @@ typedef HTTPOutputValidator = bool Function(String output,
     Map<String, String> callParameters, Map<String, String> requestParameters);
 typedef HTTPOutputFilter = String Function(String output,
     Map<String, String> callParameters, Map<String, String> requestParameters);
-typedef HTTPJSONOutputFilter = dynamic Function(dynamic json,
+typedef HTTPJSONOutputFilter = dynamic Function(Object /*?*/ json,
     Map<String, String> callParameters, Map<String, String> requestParameters);
 
 typedef BodyBuilderFunctionString = String Function(
@@ -394,10 +394,10 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
   List<String> authorizationFields;
 
   /// Body of the request.
-  dynamic body;
+  Object /*?*/ body;
 
   /// Body pattern for the request.
-  dynamic bodyBuilder;
+  Object /*?*/ bodyBuilder;
 
   /// Body type. Example: JSON.
   String bodyType;
@@ -482,7 +482,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       Map<String, String> callParameters,
       Credential authorization,
       Map<String, String> requestParameters,
-      dynamic body,
+      Object /*?*/ body,
       String bodyType,
       SysProgressListener onProgress) {
     var progressListener =
@@ -524,7 +524,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       Map<String, String> callParameters,
       Credential authorization,
       Map<String, String> requestParameters,
-      dynamic body,
+      Object /*?*/ body,
       String bodyType,
       int maxErrorRetries,
       List<HttpError> errors,
@@ -579,7 +579,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
       Map<String, String> callParameters,
       Credential authorization,
       Map<String, String> requestParameters,
-      dynamic body,
+      Object /*?*/ body,
       String bodyType,
       int maxErrorRetries,
       List<HttpError> errors,
@@ -827,7 +827,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
     return null;
   }
 
-  dynamic buildBody(Map<String, String> parameters,
+  Object /*?*/ buildBody(Map<String, String> parameters,
       [Map<String, String> requestParameters]) {
     if (body != null) return body;
     if (bodyBuilder == null) return null;
@@ -894,8 +894,8 @@ class DynCallHttpExecutorFactory {
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
-      dynamic body,
-      dynamic bodyBuilder,
+      Object /*?*/ body,
+      Object /*?*/ bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -955,8 +955,8 @@ class DynCallHttpExecutorFactory {
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
-      dynamic body,
-      dynamic bodyBuilder,
+      Object /*?*/ body,
+      Object /*?*/ bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -1025,8 +1025,8 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
-      dynamic body,
-      dynamic bodyBuilder,
+      Object /*?*/ body,
+      Object /*?*/ bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,
@@ -1067,8 +1067,8 @@ class DynCallHttpExecutorFactory_builder<E, O> {
       noQueryString = false,
       Credential authorization,
       List<String> authorizationFields,
-      dynamic body,
-      dynamic bodyBuilder,
+      Object /*?*/ body,
+      Object /*?*/ bodyBuilder,
       String bodyType,
       E errorResponse,
       int errorMaxRetries = 3,

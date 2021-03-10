@@ -4,10 +4,10 @@ import 'package:dynamic_call/dynamic_call.dart';
 import 'package:json_object_mapper/json_object_mapper.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
-typedef DataTransformerTo<T> = T Function(dynamic o);
-typedef DataTransformerToList<T> = List<T> Function(dynamic o);
+typedef DataTransformerTo<T> = T Function(Object /*?*/ o);
+typedef DataTransformerToList<T> = List<T> Function(Object /*?*/ o);
 
-List<T> doTransformToList<T>(dynamic o, DataTransformerTo<T> transformerTo,
+List<T> doTransformToList<T>(Object /*?*/ o, DataTransformerTo<T> transformerTo,
     DataTransformerToList<T> transformerToList) {
   if (transformerToList != null) {
     return transformerToList(o);
@@ -23,7 +23,7 @@ List<T> doTransformToList<T>(dynamic o, DataTransformerTo<T> transformerTo,
   }
 }
 
-T doTransformTo<T>(dynamic o, DataTransformerTo<T> transformerTo) {
+T doTransformTo<T>(Object /*?*/ o, DataTransformerTo<T> transformerTo) {
   if (transformerTo == null) {
     return o;
   }
@@ -154,9 +154,9 @@ abstract class DataHandler<T> {
 
   DataTransformerFrom<T> transformerFrom;
 
-  T transformTo(dynamic o) => doTransformTo(o, transformerTo);
+  T transformTo(Object /*?*/ o) => doTransformTo(o, transformerTo);
 
-  List<T> transformToList(dynamic o) =>
+  List<T> transformToList(Object /*?*/ o) =>
       doTransformToList(o, transformerTo, transformerToList);
 
   DataTransformerFromList<T> transformerFromList;
@@ -165,6 +165,8 @@ abstract class DataHandler<T> {
 
   dynamic transformFromList(List<T> list) =>
       doTransformFromList(list, transformerFrom, transformerFromList);
+
+  List<T> transformOutput(Object /*?*/ o) => transformToList(o);
 
   @override
   bool operator ==(Object other) =>
@@ -380,7 +382,8 @@ abstract class DataSource<T> extends DataHandler<T> {
     return transformToList(result);
   }
 
-  static Map<String, dynamic> parametersFindByID(dynamic id) => {'--id': id};
+  static Map<String, dynamic> parametersFindByID(Object /*?*/ id) =>
+      {'--id': id};
 
   static Map<String, dynamic> parametersFindByIDRange(fromID, toID) =>
       {'--fromID': fromID, '--toID': toID};
@@ -389,12 +392,12 @@ abstract class DataSource<T> extends DataHandler<T> {
       {'--filter': filter};
 
   /// Finds data by ID.
-  Future<List<T>> findByID(dynamic id) async {
+  Future<List<T>> findByID(Object /*?*/ id) async {
     return findByIDImpl(parametersFindByID(id));
   }
 
   /// Finds data by ID range.
-  Future<List<T>> findByIDRange(dynamic fromID, dynamic toID) async {
+  Future<List<T>> findByIDRange(Object /*?*/ fromID, Object /*?*/ toID) async {
     return get(parametersFindByIDRange(fromID, toID));
   }
 
@@ -450,7 +453,7 @@ abstract class DataReceiver<T> extends DataHandler<T> {
   DataReceiver(String domain, String name, {bool register = true})
       : super(domain, name, register: register);
 
-  Future putImpl(Map<String, dynamic> parameters, dynamic payload);
+  Future putImpl(Map<String, dynamic> parameters, Object /*?*/ payload);
 
   /// Puts [dataList] using [parameters].
   Future<List<T>> put(
@@ -544,12 +547,12 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   }
 
   @override
-  Future<List<T>> findByID(dynamic id) async {
+  Future<List<T>> findByID(Object /*?*/ id) async {
     return get(DataSource.parametersFindByID(id));
   }
 
   @override
-  Future<List<T>> findByIDRange(dynamic fromID, dynamic toID) async {
+  Future<List<T>> findByIDRange(Object /*?*/ fromID, Object /*?*/ toID) async {
     return get(DataSource.parametersFindByIDRange(fromID, toID));
   }
 
@@ -595,7 +598,7 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   }
 
   @override
-  List<T> transformToList(dynamic o) {
+  List<T> transformToList(Object /*?*/ o) {
     if (transformerToList != null) {
       return transformerToList(o);
     }
@@ -638,7 +641,7 @@ class DataRepositoryWrapper<T> extends DataRepository<T> {
   }
 
   @override
-  Future putImpl(Map<String, dynamic> parameters, dynamic payload) {
+  Future putImpl(Map<String, dynamic> parameters, Object /*?*/ payload) {
     throw UnimplementedError();
   }
 
@@ -676,7 +679,7 @@ class DataRepositoryWrapper<T> extends DataRepository<T> {
   }
 
   @override
-  List<T> transformToList(dynamic o) {
+  List<T> transformToList(Object /*?*/ o) {
     if (receiver.transformerTo != null) {
       return receiver.transformToList(o);
     } else if (source.transformerTo != null) {
@@ -684,6 +687,19 @@ class DataRepositoryWrapper<T> extends DataRepository<T> {
     } else {
       return super.transformToList(o);
     }
+  }
+
+  @override
+  List<T> transformOutput(Object /*?*/ o) => transformToList(o);
+}
+
+List<T> transformToList<T>(Object /*?*/ o) {
+  if (o is List) {
+    return o.whereType<T>().toList();
+  } else if (o is T) {
+    return <T>[o];
+  } else {
+    return <T>[o];
   }
 }
 
@@ -711,7 +727,8 @@ class DataReceiverDynCall<T> extends DataReceiver<T> {
       : super(domain, name);
 
   @override
-  Future<List> putImpl(Map<String, dynamic> parameters, dynamic payload) async {
+  Future<List> putImpl(
+      Map<String, dynamic> parameters, Object /*?*/ payload) async {
     var response = await call.call(parameters);
     if (response == null) return [];
     if (response is List) return response;
@@ -728,8 +745,7 @@ class DataSourceExecutor<E, T> extends DataSource<T> {
   DataSourceExecutor(String domain, String name, DynCallExecutor<E> executor)
       : super(domain, name) {
     _call = DynCall<E, List<T>>([], DynCallType.JSON,
-        allowRetries: true,
-        outputFilter: (o) => transformToList(o is List ? o : [o]));
+        allowRetries: true, outputFilter: (o) => transformOutput(o));
 
     _call.executor = executor;
   }
@@ -750,14 +766,13 @@ class DataReceiverExecutor<E, T> extends DataReceiver<T> {
   DataReceiverExecutor(String domain, String name, DynCallExecutor<E> executor)
       : super(domain, name) {
     _call = DynCall<E, List<T>>([], DynCallType.JSON,
-        allowRetries: true,
-        outputFilter: (o) => transformToList(o is List ? o : [o]));
+        allowRetries: true, outputFilter: (o) => transformOutput(o));
 
     _call.executor = executor;
   }
 
   @override
-  Future putImpl(Map<String, dynamic> parameters, dynamic payload) async {
+  Future putImpl(Map<String, dynamic> parameters, Object /*?*/ payload) async {
     var response = await _call.executor.call(_call, parameters, null);
     return response;
   }
@@ -765,7 +780,8 @@ class DataReceiverExecutor<E, T> extends DataReceiver<T> {
 
 /// Represents a [HttpCall] to request data.
 class DataCallHttp extends HttpCall {
-  static Map<String, String> toParametersPattern(dynamic parametersPattern) {
+  static Map<String, String> toParametersPattern(
+      Object /*?*/ parametersPattern) {
     if (parametersPattern == null) return null;
     if (parametersPattern is String) {
       return decodeQueryString(parametersPattern);
@@ -799,8 +815,8 @@ class DataCallHttp extends HttpCall {
       HttpMethod method,
       String path,
       bool fullPath,
-      dynamic parametersPattern,
-      dynamic body,
+      Object /*?*/ parametersPattern,
+      Object /*?*/ body,
       int maxRetries})
       : parametersPattern = toParametersPattern(parametersPattern),
         super(
@@ -828,7 +844,7 @@ class DataCallHttp extends HttpCall {
     }
   }
 
-  String _appendPath(String path, dynamic append) {
+  String _appendPath(String path, Object /*?*/ append) {
     if (!path.endsWith('/')) {
       path += '/';
     }
@@ -906,8 +922,8 @@ class DataSourceOperationHttp<T> {
   HttpMethod method;
   String path;
   bool fullPath;
-  dynamic parameters;
-  dynamic body;
+  Object /*?*/ parameters;
+  Object /*?*/ body;
 
   DataTransformerTo<T> transformResponse;
   JSONTransformer jsonTransformer;
@@ -924,7 +940,7 @@ class DataSourceOperationHttp<T> {
       this.parameters,
       this.body,
       this.transformResponse,
-      dynamic jsonTransformer,
+      Object /*?*/ jsonTransformer,
       this.samples})
       : jsonTransformer = JSONTransformer.from(jsonTransformer);
 
@@ -948,7 +964,7 @@ class DataSourceOperationHttp<T> {
     return encodeJSON(toJsonMap(), withIndent: withIndent);
   }
 
-  factory DataSourceOperationHttp.from(dynamic config) {
+  factory DataSourceOperationHttp.from(Object /*?*/ config) {
     if (config == null) return null;
 
     if (config is String) {
@@ -1029,7 +1045,7 @@ class DataSourceOperationHttp<T> {
 
   Future<T> call(Map<String, dynamic> parameters) async {
     var needCall = true;
-    dynamic response;
+    Object /*?*/ response;
 
     if (parameters != null && parameters.containsKey('SAMPLE')) {
       var sampleId = parameters['SAMPLE'];
@@ -1090,7 +1106,7 @@ class DataSourceOperationHttp<T> {
 class DataSourceHttp<T> extends DataSource<T> {
   final String baseURL;
   final String baseURLProxy;
-  final dynamic parameters;
+  final Object /*?*/ parameters;
 
   final DataSourceOperationHttp opGet;
   final DataSourceOperationHttp opFind;
@@ -1165,7 +1181,7 @@ class DataSourceHttp<T> extends DataSource<T> {
     return encodeJSON(toJsonMap(), withIndent: withIndent);
   }
 
-  factory DataSourceHttp.from(dynamic config) {
+  factory DataSourceHttp.from(Object /*?*/ config) {
     if (config == null) return null;
 
     if (config is DataSourceHttp) return config;
@@ -1328,7 +1344,7 @@ class DataReceiverHttp<T> extends DataReceiver<T> {
       HttpMethod method,
       String path,
       bool fullPath,
-      dynamic body})
+      Object /*?*/ body})
       : httpConfig = DataCallHttp(
             baseURL: baseURL,
             client: client,
@@ -1340,7 +1356,7 @@ class DataReceiverHttp<T> extends DataReceiver<T> {
         super(domain, name);
 
   @override
-  Future putImpl(Map<String, dynamic> parameters, dynamic payload) {
+  Future putImpl(Map<String, dynamic> parameters, Object /*?*/ payload) {
     return httpConfig.callAndResolve(parameters, body: payload);
   }
 }
@@ -1357,11 +1373,11 @@ class DataRepositoryHttp<T> extends DataRepository<T> {
       HttpMethod sourceMethod,
       String sourcePath,
       bool sourceFullPath,
-      dynamic sourceBody,
+      Object /*?*/ sourceBody,
       HttpMethod receiverMethod,
       String receiverPath,
       bool receiverFullPath,
-      dynamic receiverBody})
+      Object /*?*/ receiverBody})
       : httpConfigSource = DataCallHttp(
             baseURL: baseURL,
             client: client,
@@ -1392,9 +1408,12 @@ class DataRepositoryHttp<T> extends DataRepository<T> {
   }
 
   @override
-  Future putImpl(Map<String, dynamic> parameters, dynamic payload) {
+  Future putImpl(Map<String, dynamic> parameters, Object /*?*/ payload) {
     return httpConfigReceiver.callAndResolve(parameters, body: payload);
   }
+
+  @override
+  List<T> transformOutput(Object /*?*/ o) => transformToList(o);
 }
 
 class DataSourceCall<T> {
@@ -1445,7 +1464,7 @@ class DataSourceCall<T> {
       : dataSourceResolver = DataSourceResolver.byID(dataSourceID),
         parameters = HttpCall.toQueryParameters(parameters);
 
-  factory DataSourceCall.from(dynamic call) {
+  factory DataSourceCall.from(Object /*?*/ call) {
     if (call is DataSourceCall) return call;
     if (call is String) return DataSourceCall.parse(call);
     return null;
