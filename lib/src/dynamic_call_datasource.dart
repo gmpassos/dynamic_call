@@ -1001,25 +1001,30 @@ class DataSourceOperationHttp<T> {
 
     if (config is Map) {
       config.removeWhere((key, value) => value == null);
-      var configMap = config.cast<Object?, Object>();
 
-      var operation = getDataSourceOperation(
-          parseString(findKeyValue(configMap, ['operation', 'op'], true)));
+      var operation = getDataSourceOperation(parseString(
+          parseString(findKeyValue(config, ['operation', 'op'], true))));
 
-      var baseURL =
-          parseString(findKeyValue(configMap, ['baseurl', 'url'], true))!;
-      baseURL = resolveDataSourceBaseURL(baseURL);
+      var baseURL = parseString(
+          parseString(findKeyValue(config, ['baseurl', 'url'], true)));
+      if (baseURL != null) {
+        baseURL = resolveDataSourceBaseURL(baseURL);
+      }
 
-      var baseURLProxy = parseString(
-          findKeyValue(configMap, ['baseurlproxy', 'urlproxy'], true))!;
-      baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+      var baseURLProxy =
+          parseString(findKeyValue(config, ['baseurlproxy', 'urlproxy'], true));
+
+      if (baseURLProxy != null) {
+        baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+      }
 
       var method =
-          getHttpMethod(parseString(findKeyValue(configMap, ['method'], true)));
-      var path = parseString(findKeyValue(configMap, ['path'], true));
+          getHttpMethod(parseString(findKeyValue(config, ['method'], true)));
+      var path = parseString(findKeyValue(config, ['path'], true));
       var fullPath = parseBool(findKeyValue(config, ['fullPath'], true));
       var parameters =
-          findKeyValue(config, ['parameters', 'args', 'properties'], true);
+          findKeyValue(config, ['parameters', 'args', 'properties'], true)
+              as Map;
       var body = findKeyValue(config, ['body', 'content', 'payload'], true);
 
       var jsonTransformer = findKeyValue(
@@ -1224,9 +1229,8 @@ class DataSourceHttp<T> extends DataSource<T> {
 
     if (config is Map) {
       config.removeWhere((key, value) => value == null);
-      var configMap = config.cast<Object?, Object>();
 
-      var id = parseString(findKeyValue(configMap, ['id'], true));
+      var id = parseString(findKeyValue(config, ['id'], true));
 
       String? domain;
       String? name;
@@ -1239,28 +1243,29 @@ class DataSourceHttp<T> extends DataSource<T> {
         }
       }
 
-      domain = parseString(findKeyValue(configMap, ['domain'], true), domain);
-      name = parseString(findKeyValue(configMap, ['name'], true), name);
+      domain = parseString(findKeyValue(config, ['domain'], true), domain);
+      name = parseString(findKeyValue(config, ['name'], true), name);
 
-      var baseURL =
-          parseString(findKeyValue(configMap, ['baseurl', 'url'], true))!;
-      baseURL = resolveDataSourceBaseURL(baseURL);
+      var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
+      if (baseURL != null) baseURL = resolveDataSourceBaseURL(baseURL);
 
-      var baseURLProxy = parseString(
-          findKeyValue(configMap, ['baseurlproxy', 'urlproxy'], true))!;
-      baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+      var baseURLProxy =
+          parseString(findKeyValue(config, ['baseurlproxy', 'urlproxy'], true));
+      if (baseURLProxy != null) {
+        baseURLProxy = resolveDataSourceBaseURL(baseURLProxy);
+      }
 
       var parameters =
-          findKeyValue(configMap, ['parameters', 'args', 'properties'], true);
+          findKeyValue(config, ['parameters', 'args', 'properties'], true);
 
       var opGet = DataSourceOperationHttp.from(
-          findKeyValue(configMap, ['opGet', 'get'], true));
+          findKeyValue(config, ['opGet', 'get'], true));
       var opFind = DataSourceOperationHttp.from(
-          findKeyValue(configMap, ['opFind', 'find'], true));
+          findKeyValue(config, ['opFind', 'find'], true));
       var opFindByID = DataSourceOperationHttp.from(
-          findKeyValue(configMap, ['opFindByID', 'findByID'], true));
+          findKeyValue(config, ['opFindByID', 'findByID'], true));
       var opFindByIDRange = DataSourceOperationHttp.from(
-          findKeyValue(configMap, ['opFindByIDRange', 'findByIDRange'], true));
+          findKeyValue(config, ['opFindByIDRange', 'findByIDRange'], true));
 
       return DataSourceHttp(domain, name,
           baseURL: baseURL,

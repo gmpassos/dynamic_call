@@ -348,7 +348,7 @@ typedef HTTPOutputFilter = String Function(
     Map<String, String?>? callParameters,
     Map<String, String?>? requestParameters);
 typedef HTTPJSONOutputFilter = dynamic Function(
-    Object? json,
+    dynamic json,
     Map<String, String?>? callParameters,
     Map<String, String?>? requestParameters);
 
