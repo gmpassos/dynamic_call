@@ -24,7 +24,7 @@ class DynCall<E, O> {
   final DynCallType outputType;
 
   /// Output filter, to transform from [E] to [O].
-  final SysCallOutputFilter<O, E?>? outputFilter;
+  final SysCallOutputFilter<O?, E?>? outputFilter;
 
   /// If [true] allows retries of the call. Recommended only for call that
   /// won't make changes to the system.
@@ -106,7 +106,15 @@ class DynCall<E, O> {
 
   O? mapOutput(E? out) {
     if (outputFilter != null) {
-      return outputFilter!(out);
+      try {
+        return outputFilter!(out);
+      } catch (e, s) {
+        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
+        print(e);
+        print(s);
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+        return null;
+      }
     } else {
       return out as O?;
     }
@@ -680,7 +688,7 @@ class DynCallHttpExecutor<E> extends DynCallExecutor<E> {
 
       if (json is Map) {
         responseContent = buildStringPattern(
-            outputFilterPattern, callParameters, [json, requestParameters!]);
+            outputFilterPattern, callParameters, [json, requestParameters]);
       } else {
         responseContent =
             buildStringPattern(outputFilterPattern, callParameters);

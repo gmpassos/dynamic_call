@@ -88,9 +88,9 @@ abstract class DataHandler<T> {
     return instance;
   }
 
-  final String? id;
-  final String? domain;
-  final String? name;
+  final String id;
+  final String domain;
+  final String name;
 
   DataHandler(this.domain, this.name,
       {bool register = true,
@@ -98,7 +98,7 @@ abstract class DataHandler<T> {
       DataTransformerToList<T>? transformerToList,
       DataTransformerFrom<T>? transformerFrom,
       DataTransformerFromList<T>? transformerFromList})
-      : id = normalizeID(domain, name),
+      : id = normalizeID(domain, name)!,
         transformerTo = transformerTo,
         transformerToList = transformerToList,
         transformerFrom = transformerFrom,
@@ -125,7 +125,7 @@ abstract class DataHandler<T> {
           '${dataHandler.runtimeType}[${dataHandler.domain}:${dataHandler.name}]: null (id)');
     }
 
-    var idParts = splitID(dataHandler.id!);
+    var idParts = splitID(dataHandler.id);
 
     if (idParts == null ||
         idParts.length != 2 ||
@@ -356,7 +356,7 @@ abstract class DataSource<T> extends DataHandler<T> {
     return instance as DataSource<T>?;
   }
 
-  DataSource(String? domain, String? name,
+  DataSource(String domain, String name,
       {bool register = true,
       DataTransformerTo<T>? transformerTo,
       DataTransformerToList<T>? transformerToList,
@@ -496,7 +496,7 @@ abstract class DataRepository<T> implements DataSource<T>, DataReceiver<T> {
   final String name;
 
   @override
-  String? get id => DataHandler.normalizeID(domain, name);
+  String get id => DataHandler.normalizeID(domain, name)!;
 
   DataRepository(this.domain, this.name, {bool register = true}) {
     DataHandler._check(this);
@@ -1150,7 +1150,7 @@ class DataSourceHttp<T> extends DataSource<T> {
   final DataSourceOperationHttp? opFindByID;
   final DataSourceOperationHttp? opFindByIDRange;
 
-  DataSourceHttp(String? domain, String? name,
+  DataSourceHttp(String domain, String name,
       {this.baseURL,
       this.baseURLProxy,
       this.parameters,
@@ -1245,6 +1245,8 @@ class DataSourceHttp<T> extends DataSource<T> {
 
       domain = parseString(findKeyValue(config, ['domain'], true), domain);
       name = parseString(findKeyValue(config, ['name'], true), name);
+
+      if (domain == null || name == null) return null;
 
       var baseURL = parseString(findKeyValue(config, ['baseurl', 'url'], true));
       if (baseURL != null) baseURL = resolveDataSourceBaseURL(baseURL);

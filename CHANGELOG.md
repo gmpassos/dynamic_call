@@ -1,3 +1,10 @@
+## 2.0.1
+
+- Sound null safety compatibility.
+- mercury_client: ^2.0.1
+- swiss_knife: ^3.0.6
+- json_object_mapper: ^2.0.1 
+
 ## 2.0.0-nullsafety.2
 
 - Null Safety adjustments.
